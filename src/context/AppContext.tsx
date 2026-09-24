@@ -13,6 +13,7 @@ import type {
   NewBorrowerInput,
   ActivityLogEntry,
   AppSettings,
+  CashLedgerEntry,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
@@ -39,6 +40,7 @@ interface AppContextType {
   borrowers: Borrower[];
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
+  cashLedger: CashLedgerEntry[];
   timeframe: Timeframe;
   borrowerFilter: BorrowerFilter;
   searchQuery: string;
@@ -59,6 +61,10 @@ interface AppContextType {
   updateBorrower: (id: string, data: Partial<NewBorrowerInput>) => void;
   addPayment: (data: Omit<PaymentRecord, 'id' | 'createdAt'>) => void;
   addActivity: (entry: Omit<ActivityLogEntry, 'id' | 'createdAt'>) => void;
+  getCashInHand: () => number;
+  getTotalOutFlow: () => number;
+  addManualCash: (amount: number, note?: string) => void;
+  decreaseManualCash: (amount: number, note?: string) => void;
   getBorrowerPaidAmount: (borrowerId: string) => number;
   getBorrowerLastPaymentDate: (borrowerId: string) => string;
   getTodayCollectedAmount: (tf: Timeframe) => number;
@@ -269,6 +275,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error(e);
     }
   }, [agents]);
+
+  const [cashLedger, setCashLedger] = useState<CashLedgerEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('kn_finance_cash_ledger');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kn_finance_cash_ledger', JSON.stringify(cashLedger));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [cashLedger]);
 
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>(() => {
     try {
@@ -626,6 +651,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBorrowers(prev => [newBorrower, ...prev]);
 
+    // Automatic Cash Outflow on Loan Disbursement:
+    // Net amount actually handed over to the borrower
+    const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0));
+    if (netDisbursed > 0) {
+      const ledgerEntry: CashLedgerEntry = {
+        id: `cash_loan_${newBorrower.id}_${Date.now()}`,
+        companyId: currentUser?.companyId,
+        transactionType: 'LOAN_DISBURSED',
+        amount: netDisbursed,
+        sourceType: 'LOAN',
+        borrowerId: newBorrower.id,
+        borrowerName: newBorrower.borrowerName,
+        note: `Loan disbursed to ${newBorrower.borrowerName}`,
+        performedByUserId: currentUser?.companyUserId || null,
+        performedByName: currentUser?.fullName || 'Manager',
+        createdAt: now,
+      };
+      setCashLedger(prev => {
+        if (prev.some(e => e.transactionType === 'LOAN_DISBURSED' && e.borrowerId === newBorrower.id)) {
+          return prev;
+        }
+        return [ledgerEntry, ...prev];
+      });
+    }
+
     addActivity({
       action: 'borrower_created',
       performedByUserId: null,
@@ -667,6 +717,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addPayment = (data: Omit<PaymentRecord, 'id' | 'createdAt'>) => {
     const paymentId = Date.now().toString();
+    const now = new Date().toISOString();
     const newPayment: PaymentRecord = {
       id: paymentId,
       ...data,
@@ -674,9 +725,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       collectedByUserId: data.collectedByUserId !== undefined ? data.collectedByUserId : null,
       collectedByRole: data.collectedByRole || (data.collectedByUserId ? 'agent' : 'manager'),
       collectedBy: data.collectedBy || (data.collectedByRole === 'agent' ? 'Agent' : 'Manager'),
-      createdAt: new Date().toISOString(),
+      createdAt: now,
     };
     setPayments(prev => [newPayment, ...prev]);
+
+    // Automatic Collection Inflow on Payment Receipt:
+    if (data.amount > 0) {
+      const ledgerEntry: CashLedgerEntry = {
+        id: `cash_pay_${paymentId}`,
+        companyId: currentUser?.companyId,
+        transactionType: 'PAYMENT_COLLECTED',
+        amount: data.amount,
+        sourceType: 'PAYMENT',
+        paymentId: paymentId,
+        borrowerId: data.borrowerId,
+        borrowerName: data.borrowerName,
+        note: `Collection received from ${data.borrowerName}`,
+        performedByUserId: newPayment.collectedByUserId ?? null,
+        performedByName: newPayment.collectedBy || (newPayment.collectedByRole === 'agent' ? 'Agent' : 'Manager'),
+        createdAt: now,
+      };
+      setCashLedger(prev => {
+        if (prev.some(e => e.transactionType === 'PAYMENT_COLLECTED' && e.paymentId === paymentId)) {
+          return prev;
+        }
+        return [ledgerEntry, ...prev];
+      });
+    }
 
     // 1. Record payment_collected activity
     addActivity({
@@ -781,6 +856,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return dues.length;
   };
 
+  const getCashInHand = (): number => {
+    const inflows = cashLedger
+      .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED')
+      .reduce((sum, e) => sum + e.amount, 0);
+    const outflows = cashLedger
+      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
+      .reduce((sum, e) => sum + e.amount, 0);
+    return inflows - outflows;
+  };
+
+  const getTotalOutFlow = (): number => {
+    return cashLedger
+      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
+      .reduce((sum, e) => sum + e.amount, 0);
+  };
+
+  const addManualCash = (amount: number, note?: string) => {
+    if (amount <= 0) return;
+    const now = new Date().toISOString();
+    const isFirstEntry = cashLedger.length === 0;
+    const newEntry: CashLedgerEntry = {
+      id: `cash_add_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      companyId: currentUser?.companyId,
+      transactionType: 'CASH_ADDED',
+      amount,
+      sourceType: 'MANUAL',
+      note: note?.trim() || (isFirstEntry ? 'Initial Starting Cash' : 'Cash added to hand'),
+      performedByUserId: currentUser?.companyUserId || null,
+      performedByName: currentUser?.fullName || 'Manager',
+      createdAt: now,
+    };
+    setCashLedger(prev => [newEntry, ...prev]);
+  };
+
+  const decreaseManualCash = (amount: number, note?: string) => {
+    if (amount <= 0) return;
+    const now = new Date().toISOString();
+    const newEntry: CashLedgerEntry = {
+      id: `cash_dec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      companyId: currentUser?.companyId,
+      transactionType: 'CASH_DECREASED',
+      amount,
+      sourceType: 'MANUAL',
+      note: note?.trim() || 'Cash withdrawn / decreased',
+      performedByUserId: currentUser?.companyUserId || null,
+      performedByName: currentUser?.fullName || 'Manager',
+      createdAt: now,
+    };
+    setCashLedger(prev => [newEntry, ...prev]);
+  };
+
   const sanitizedAgents: AgentUser[] = agents.map(({ pinHash: _pinHash, ...safeAgent }) => safeAgent);
 
   return (
@@ -796,6 +922,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         borrowers,
         payments,
         activityLogs,
+        cashLedger,
         timeframe,
         borrowerFilter,
         searchQuery,
@@ -816,6 +943,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateBorrower,
         addPayment,
         addActivity,
+        getCashInHand,
+        getTotalOutFlow,
+        addManualCash,
+        decreaseManualCash,
         getBorrowerPaidAmount,
         getBorrowerLastPaymentDate,
         getTodayCollectedAmount,

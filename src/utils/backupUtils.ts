@@ -8,6 +8,7 @@ import type {
   PaymentRecord,
   ActivityLogEntry,
   AppSettings,
+  CashLedgerEntry,
 } from '../types.ts';
 import { DEFAULT_SETTINGS } from '../types.ts';
 import { hashPinSync } from './security.ts';
@@ -20,6 +21,7 @@ export const KN_FINANCE_STORAGE_KEYS = [
   'kn_finance_payments',
   'kn_finance_activity_logs',
   'kn_finance_settings',
+  'kn_finance_cash_ledger',
 ] as const;
 
 export interface BackupValidationResult {
@@ -39,6 +41,7 @@ export function createBackupPayload(params: {
   borrowers: Borrower[];
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
+  cashLedger?: CashLedgerEntry[];
   settings?: AppSettings;
 }): { backup: KNFinanceBackup; filename: string; backupActivity: ActivityLogEntry } {
   const now = new Date();
@@ -113,6 +116,21 @@ export function createBackupPayload(params: {
     }
   }
 
+  let currentCashLedger: CashLedgerEntry[] = [];
+  if (params.cashLedger) {
+    currentCashLedger = params.cashLedger;
+  } else {
+    try {
+      const saved = localStorage.getItem('kn_finance_cash_ledger');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) currentCashLedger = parsed;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
   const backup: KNFinanceBackup = {
     app: 'KN FINANCE',
     backupVersion: 1,
@@ -124,6 +142,7 @@ export function createBackupPayload(params: {
       borrowers: params.borrowers,
       payments: params.payments,
       activityLogs: [backupActivity, ...params.activityLogs],
+      cashLedger: currentCashLedger,
       settings: currentSettings,
       auth: {
         managerPinHash: managerPinHash || undefined,
@@ -367,6 +386,11 @@ export function performSafeRestore(backup: KNFinanceBackup): { success: boolean;
       ? { ...DEFAULT_SETTINGS, ...backup.data.settings }
       : DEFAULT_SETTINGS;
     newValues['kn_finance_settings'] = JSON.stringify(restoredSettings);
+
+    // Restore Cash Ledger if present in backup
+    if (backup.data.cashLedger && Array.isArray(backup.data.cashLedger)) {
+      newValues['kn_finance_cash_ledger'] = JSON.stringify(backup.data.cashLedger);
+    }
 
     // 3. Perform atomic write of whitelisted keys
     for (const [key, serialized] of Object.entries(newValues)) {

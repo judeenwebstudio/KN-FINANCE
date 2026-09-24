@@ -165,6 +165,29 @@ export const DEFAULT_SETTINGS: AppSettings = {
   keepLoggedIn: true,
 };
 
+export type CashTransactionType =
+  | 'CASH_ADDED'
+  | 'CASH_DECREASED'
+  | 'LOAN_DISBURSED'
+  | 'PAYMENT_COLLECTED';
+
+export type CashSourceType = 'MANUAL' | 'LOAN' | 'PAYMENT';
+
+export interface CashLedgerEntry {
+  id: string;
+  companyId?: string;
+  transactionType: CashTransactionType;
+  amount: number;
+  sourceType: CashSourceType;
+  borrowerId?: string | null;
+  borrowerName?: string | null;
+  paymentId?: string | null;
+  note?: string;
+  performedByUserId?: string | null;
+  performedByName?: string;
+  createdAt: string; // ISO string
+}
+
 export interface BackupMetadata {
   app: 'KN FINANCE';
   backupVersion: 1;
@@ -178,6 +201,7 @@ export interface KNFinanceBackupData {
   borrowers: Borrower[];
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
+  cashLedger?: CashLedgerEntry[];
   settings?: AppSettings;
   auth?: {
     managerPinHash?: string;
@@ -188,4 +212,5 @@ export interface KNFinanceBackupData {
 export interface KNFinanceBackup extends BackupMetadata {
   data: KNFinanceBackupData;
 }
+
 

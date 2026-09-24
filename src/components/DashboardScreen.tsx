@@ -8,6 +8,8 @@ import {
   User,
   Search,
   CheckCircle2,
+  Wallet,
+  TrendingDown,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Timeframe } from '../types';
@@ -17,6 +19,8 @@ import { CollectionsModal } from './CollectionsModal';
 import { DueTodayModal } from './DueTodayModal';
 import { FinancialAnalyticsModal } from './FinancialAnalyticsModal';
 import { BorrowerDetailsModal } from './BorrowerDetailsModal';
+import { CashInHandModal } from './CashInHandModal';
+import { OutFlowModal } from './OutFlowModal';
 import { resolveAgentName } from '../utils/agentUtils';
 
 export const DashboardScreen: React.FC = () => {
@@ -34,6 +38,8 @@ export const DashboardScreen: React.FC = () => {
     navigateTo,
     getTodayCollectedAmount,
     getTodayDueCount,
+    getCashInHand,
+    getTotalOutFlow,
   } = useApp();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -42,6 +48,8 @@ export const DashboardScreen: React.FC = () => {
   const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
   const [isDueTodayModalOpen, setIsDueTodayModalOpen] = useState(false);
   const [isFinancialAnalyticsModalOpen, setIsFinancialAnalyticsModalOpen] = useState(false);
+  const [isCashInHandModalOpen, setIsCashInHandModalOpen] = useState(false);
+  const [isOutFlowModalOpen, setIsOutFlowModalOpen] = useState(false);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
   const [restoreSuccessToast, setRestoreSuccessToast] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -88,6 +96,8 @@ export const DashboardScreen: React.FC = () => {
     .reduce((acc, curr) => acc + (curr.loanAmount || curr.amount || 0), 0);
   const collectedToday = getTodayCollectedAmount(timeframe);
   const dueTodayCount = getTodayDueCount(timeframe);
+  const cashInHand = getCashInHand();
+  const outFlow = getTotalOutFlow();
 
   // Filter borrowers based on Active/Closed tab and Search query
   const filteredBorrowers = timeframeBorrowers.filter((b) => {
@@ -172,8 +182,8 @@ export const DashboardScreen: React.FC = () => {
 
       {/* Main Content Area - Responsive Container max-width 1200px - 1400px */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        {/* Metric Cards: 4 in ONE row on desktop, 2x2 on mobile/tablet */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-5">
+        {/* Metric Cards: 6 cards for Manager (3x2 on tablet, 6 in row on XL), 4 cards for Agent */}
+        <div className={`grid gap-3.5 sm:gap-5 ${currentRole === 'manager' ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4'}`}>
           {/* CARD 1: Active Borrowers (Clickable to open Active Borrowers Modal) */}
           <div
             onClick={() => setIsActiveBorrowersModalOpen(true)}
@@ -273,6 +283,61 @@ export const DashboardScreen: React.FC = () => {
               {dueTodayCount}
             </div>
           </div>
+
+          {/* Manager-only Cards: Cash in Hand & Out Flow */}
+          {currentRole === 'manager' && (
+            <>
+              {/* CARD 5: Cash in Hand (Clickable to open Cash in Hand Modal) */}
+              <div
+                onClick={() => setIsCashInHandModalOpen(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    setIsCashInHandModalOpen(true);
+                  }
+                }}
+                className="bg-white rounded-2xl p-4 sm:p-5 lg:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow-md active:scale-[0.99] transition-all group"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs sm:text-sm font-semibold text-[#64748b] group-hover:text-emerald-600 transition-colors">
+                    Cash in Hand
+                  </span>
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                    <Wallet size={18} />
+                  </div>
+                </div>
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#1e293b]">
+                  ₹{cashInHand.toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              {/* CARD 6: Out Flow (Clickable to open Out Flow Breakdown Modal) */}
+              <div
+                onClick={() => setIsOutFlowModalOpen(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    setIsOutFlowModalOpen(true);
+                  }
+                }}
+                className="bg-white rounded-2xl p-4 sm:p-5 lg:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between cursor-pointer hover:border-rose-300 hover:shadow-md active:scale-[0.99] transition-all group"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs sm:text-sm font-semibold text-[#64748b] group-hover:text-rose-600 transition-colors">
+                    Out Flow
+                  </span>
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                    <TrendingDown size={18} />
+                  </div>
+                </div>
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#1e293b]">
+                  ₹{outFlow.toLocaleString('en-IN')}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Dashboard Control Card - Full-width desktop responsive bar */}
@@ -448,6 +513,20 @@ export const DashboardScreen: React.FC = () => {
         borrowerId={selectedBorrowerId}
         onClose={() => setSelectedBorrowerId(null)}
       />
+
+      {/* Cash In Hand Modal (Manager only) */}
+      {currentRole === 'manager' && (
+        <>
+          <CashInHandModal
+            isOpen={isCashInHandModalOpen}
+            onClose={() => setIsCashInHandModalOpen(false)}
+          />
+          <OutFlowModal
+            isOpen={isOutFlowModalOpen}
+            onClose={() => setIsOutFlowModalOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 };
