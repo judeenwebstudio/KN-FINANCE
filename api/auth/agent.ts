@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+const anonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST' && req.method !== 'PATCH') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -31,15 +33,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Invalid or expired manager session.' });
     }
 
-    // Verify caller is an active Manager in company_users
-    const { data: managerProfile, error: mgrErr } = await supabaseAdmin
+    // Authenticated client with user JWT to read company profile under RLS
+    const userClient = createClient(supabaseUrl, anonKey || serviceRoleKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+
+    let managerProfile: { id: string; company_id: string; role: string; status: string } | null = null;
+
+    const { data: userClientProfile } = await userClient
       .from('company_users')
       .select('id, company_id, role, status')
       .eq('auth_user_id', userData.user.id)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
-    if (mgrErr || !managerProfile || managerProfile.role !== 'manager') {
+    if (userClientProfile) {
+      managerProfile = userClientProfile;
+    } else {
+      const { data: adminProfile, error: adminErr } = await supabaseAdmin
+        .from('company_users')
+        .select('id, company_id, role, status')
+        .eq('auth_user_id', userData.user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (adminProfile) {
+        managerProfile = adminProfile;
+      } else if (adminErr) {
+        console.error('[auth/agent] Manager profile query error:', adminErr.message);
+      }
+    }
+
+    if (!managerProfile || managerProfile.role !== 'manager') {
       return res.status(403).json({ error: 'Forbidden: Only active company Managers can perform this operation.' });
     }
 
