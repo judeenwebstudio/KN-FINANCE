@@ -303,6 +303,68 @@ export interface Database {
         Args: Record<string, never>;
         Returns: boolean;
       };
+      verify_cloud_login: {
+        Args: {
+          p_company_code: string;
+          p_mobile: string;
+          p_pin: string;
+        };
+        Returns: {
+          status: string;
+          lockout_seconds: number | null;
+          company_user_id: string;
+          auth_user_id: string | null;
+          company_id: string;
+          company_code: string;
+          company_name: string;
+          full_name: string;
+          mobile: string;
+          role: string;
+          user_status: string;
+        }[];
+      };
+      bootstrap_cloud_manager: {
+        Args: {
+          p_company_code: string;
+          p_company_name: string;
+          p_owner_name: string;
+          p_mobile: string;
+          p_email: string;
+          p_pin: string;
+          p_auth_user_id: string;
+        };
+        Returns: {
+          status: string;
+          company_id: string;
+          company_user_id: string;
+          message: string;
+        }[];
+      };
+      manager_create_cloud_agent: {
+        Args: {
+          p_manager_user_id: string;
+          p_full_name: string;
+          p_mobile: string;
+          p_pin: string;
+          p_auth_user_id: string;
+        };
+        Returns: {
+          status: string;
+          agent_id: string;
+          message: string;
+        }[];
+      };
+      manager_set_agent_status: {
+        Args: {
+          p_manager_user_id: string;
+          p_agent_id: string;
+          p_status: string;
+        };
+        Returns: {
+          status: string;
+          message: string;
+        }[];
+      };
     };
   };
 }

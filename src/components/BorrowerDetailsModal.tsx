@@ -26,7 +26,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   borrowerId,
   onClose,
 }) => {
-  const { borrowers, payments, manager, agents, addPayment, settings } = useApp();
+  const { borrowers, payments, manager, agents, addPayment, settings, currentUser, currentRole } = useApp();
 
   // Find fresh borrower record by ID so state is reactive to changes
   const borrower = useMemo(() => {
@@ -88,16 +88,23 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
 
   const isClosed = borrower.status === 'closed' || loanSummary.totalPending <= 0;
 
+  // Check if borrower is assigned to the active user (Managers can view all, Agents only assigned)
+  const isAssignedToAgent = currentRole === 'manager' || (
+    borrower?.agentId === currentUser?.companyUserId ||
+    (borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+  );
+
   // Open Collect Payment Dialog
   const handleOpenCollectPayment = () => {
     if (loanSummary.totalPending <= 0) return;
+    if (currentRole === 'agent' && !isAssignedToAgent) return;
     setPaymentAmount(
       loanSummary.todayDue > 0
         ? String(loanSummary.todayDue)
         : String(loanSummary.totalPending)
     );
     setPaymentDate(getTodayIsoDate());
-    setCollectorSelection('manager');
+    setCollectorSelection(currentRole === 'agent' ? `agent:${currentUser?.companyUserId || 'self'}` : 'manager');
     setPaymentNote('');
     setPaymentError(null);
     setIsSubmittingPayment(false);
@@ -116,13 +123,16 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
 
   // Collector label for confirmation modal
   const selectedCollectorName = useMemo(() => {
+    if (currentRole === 'agent') {
+      return `${currentUser?.fullName || 'Agent'} (You)`;
+    }
     if (collectorSelection.startsWith('agent:')) {
       const agentId = collectorSelection.replace('agent:', '');
       const agentObj = agents.find((a) => a.id === agentId);
       return agentObj ? `${agentObj.fullName} (Agent)` : 'Agent';
     }
     return `Manager (${manager?.fullName?.trim() || 'Sirajudeen'})`;
-  }, [collectorSelection, agents, manager]);
+  }, [collectorSelection, agents, manager, currentRole, currentUser]);
 
   const executeCommitPayment = () => {
     const parsedAmount = parseFloat(paymentAmount);
@@ -134,7 +144,11 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
     let collectedByUserId: string | null = null;
     let collectedBy = manager?.fullName?.trim() || 'Manager';
 
-    if (collectorSelection.startsWith('agent:')) {
+    if (currentRole === 'agent') {
+      collectedByRole = 'agent';
+      collectedByUserId = currentUser?.companyUserId || null;
+      collectedBy = currentUser?.fullName || 'Agent';
+    } else if (collectorSelection.startsWith('agent:')) {
       const agentId = collectorSelection.replace('agent:', '');
       const agentObj = agents.find((a) => a.id === agentId);
       collectedByRole = 'agent';
@@ -223,14 +237,20 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
 
             <div className="flex items-center gap-2.5">
               {!isClosed ? (
-                <button
-                  type="button"
-                  onClick={handleOpenCollectPayment}
-                  className="px-4 py-2 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.98] transition-all flex items-center gap-1.5"
-                >
-                  <Plus size={16} />
-                  <span>Collect Payment</span>
-                </button>
+                currentRole === 'agent' && !isAssignedToAgent ? (
+                  <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-semibold">
+                    Not Assigned
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpenCollectPayment}
+                    className="px-4 py-2 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.98] transition-all flex items-center gap-1.5"
+                  >
+                    <Plus size={16} />
+                    <span>Collect Payment</span>
+                  </button>
+                )
               ) : (
                 <span className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">
                   <CheckCircle2 size={14} className="text-emerald-500" />
@@ -597,20 +617,29 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                 <label className="block text-xs font-semibold text-[#1e293b] mb-1">
                   Collected By <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={collectorSelection}
-                  onChange={(e) => setCollectorSelection(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
-                >
-                  <option value="manager">
-                    Manager ({manager?.fullName?.trim() || 'Sirajudeen'})
-                  </option>
-                  {activeAgents.map((ag) => (
-                    <option key={ag.id} value={`agent:${ag.id}`}>
-                      {ag.fullName} (Agent)
+                {currentRole === 'agent' ? (
+                  <div className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 flex items-center justify-between">
+                    <span>{currentUser?.fullName || 'Agent'} (You)</span>
+                    <span className="text-[11px] font-bold text-[#4f46e5] bg-indigo-50 px-2 py-0.5 rounded-md">
+                      Agent Locked
+                    </span>
+                  </div>
+                ) : (
+                  <select
+                    value={collectorSelection}
+                    onChange={(e) => setCollectorSelection(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                  >
+                    <option value="manager">
+                      Manager ({manager?.fullName?.trim() || 'Sirajudeen'})
                     </option>
-                  ))}
-                </select>
+                    {activeAgents.map((ag) => (
+                      <option key={ag.id} value={`agent:${ag.id}`}>
+                        {ag.fullName} (Agent)
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* 5. Payment Note */}

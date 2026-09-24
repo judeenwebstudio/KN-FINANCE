@@ -19,24 +19,33 @@ import { BackupRestoreModal } from './BackupRestoreModal';
 import { SettingsModal } from './SettingsModal';
 
 export const ProfileScreen: React.FC = () => {
-  const { manager, logout, navigateTo } = useApp();
+  const { manager, currentUser, currentRole, logout, navigateTo } = useApp();
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const menuItems = [
-    { label: 'My Company', icon: Building2 },
-    { label: 'Manage Users', icon: Users },
-    { label: 'Activity Log', icon: ClipboardList },
-    { label: 'Backup & Restore', icon: Database },
-    { label: 'Settings', icon: Settings },
-    { label: 'Change PIN', icon: KeyRound },
-    { label: 'About', icon: Info },
-    { label: 'Help', icon: HelpCircle },
-    { label: 'Logout', icon: LogOut, isRed: true },
-  ];
+  // Role-based Menu Items (Agents do NOT see Manager-only administration controls)
+  const menuItems = currentRole === 'agent'
+    ? [
+        { label: 'Activity Log', icon: ClipboardList },
+        { label: 'Settings', icon: Settings },
+        { label: 'About', icon: Info },
+        { label: 'Help', icon: HelpCircle },
+        { label: 'Logout', icon: LogOut, isRed: true },
+      ]
+    : [
+        { label: 'My Company', icon: Building2 },
+        { label: 'Manage Users', icon: Users },
+        { label: 'Activity Log', icon: ClipboardList },
+        { label: 'Backup & Restore', icon: Database },
+        { label: 'Settings', icon: Settings },
+        { label: 'Change PIN', icon: KeyRound },
+        { label: 'About', icon: Info },
+        { label: 'Help', icon: HelpCircle },
+        { label: 'Logout', icon: LogOut, isRed: true },
+      ];
 
   const handleItemClick = (label: string) => {
     if (label === 'Logout') {
@@ -54,14 +63,19 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
-  // Single source of truth from registered manager account data
-  const managerDisplayName = (() => {
+  // User Display Name resolution
+  const userDisplayName = (() => {
+    if (currentUser?.fullName) {
+      return currentUser.fullName.trim();
+    }
     const name = manager?.fullName?.trim();
     if (!name || name === 'Manager User') {
-      return 'Manager';
+      return currentRole === 'agent' ? 'Agent' : 'Manager';
     }
     return name;
   })();
+
+  const companyCodeDisplay = currentUser?.companyCode || manager?.companyCode || 'KNF01';
 
   return (
     <div className="flex flex-col min-h-screen bg-[#f6f7fb] w-full">
@@ -89,17 +103,17 @@ export const ProfileScreen: React.FC = () => {
         <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-[#1e293b]">
-              {managerDisplayName}
+              {userDisplayName}
             </h2>
-            <p className="text-xs sm:text-sm font-medium text-[#64748b] mt-1">
-              Manager | Code: <span className="font-bold text-[#1e293b]">{manager?.companyCode || 'SFS806'}</span>
+            <p className="text-xs sm:text-sm font-medium text-[#64748b] mt-1 capitalize">
+              {currentRole} | Code: <span className="font-bold text-[#1e293b]">{companyCodeDisplay}</span>
             </p>
           </div>
 
           {/* Hello announcement banner */}
           <div className="px-4 py-2.5 rounded-xl bg-[#f5f6ff] border border-[#e0e7ff] text-xs sm:text-sm font-semibold text-[#4f46e5] flex items-center gap-2 self-start sm:self-auto shadow-sm">
             <span>🔔</span>
-            <span>Hello from Manager!</span>
+            <span className="capitalize">Hello from {currentRole}!</span>
           </div>
         </div>
 

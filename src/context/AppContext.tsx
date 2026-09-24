@@ -3,6 +3,7 @@ import type {
   Screen,
   ManagerAccount,
   CompanyProfile,
+  AuthUserSession,
   AgentUser,
   StoredAgentRecord,
   Borrower,
@@ -15,6 +16,7 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
+import { loginWithPin, restoreCloudSession, signOutOfCloud } from '../lib/authService';
 
 export type { NewBorrowerInput };
 
@@ -28,6 +30,9 @@ export interface DueBorrowerItem {
 
 interface AppContextType {
   screen: Screen;
+  currentUser: AuthUserSession | null;
+  currentRole: 'manager' | 'agent';
+  isCloudAuth: boolean;
   manager: ManagerAccount | null;
   company: CompanyProfile | null;
   agents: AgentUser[];
@@ -41,6 +46,7 @@ interface AppContextType {
   navigateTo: (screen: Screen) => void;
   registerManager: (data: { fullName: string; email: string; mobile: string; pin: string; keepLoggedIn: boolean }) => string;
   updateManager: (data: { fullName?: string; mobile?: string; pin?: string }) => void;
+  cloudLogin: (companyCode: string, mobile: string, pin: string, keepLoggedIn?: boolean) => Promise<{ success: boolean; error?: string; isLocked?: boolean }>;
   login: (mobileOrEmail: string, pin: string) => { success: boolean; error?: string };
   logout: () => void;
   updateCompany: (data: CompanyProfile) => void;
@@ -94,6 +100,11 @@ function generateCompanyCode(): string {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<AuthUserSession | null>(null);
+
+  const currentRole: 'manager' | 'agent' = currentUser ? currentUser.role : 'manager';
+  const isCloudAuth: boolean = currentUser !== null;
+
   const [manager, setManager] = useState<ManagerAccount | null>(() => {
     try {
       const saved = localStorage.getItem('kn_finance_manager');
@@ -133,6 +144,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return 'welcome';
   });
+
+  // Restore authenticated cloud session on application launch
+  useEffect(() => {
+    let isMounted = true;
+    restoreCloudSession()
+      .then((session) => {
+        if (isMounted) {
+          if (session) {
+            setCurrentUser(session);
+            setScreen('dashboard');
+          } else {
+            setCurrentUser(null);
+            const savedMgr = localStorage.getItem('kn_finance_manager');
+            if (!savedMgr && localStorage.getItem('kn_finance_logged_in') === 'true') {
+              localStorage.removeItem('kn_finance_logged_in');
+              setScreen('login');
+            }
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback to offline/local session
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [borrowers, setBorrowers] = useState<Borrower[]>(() => {
     try {
@@ -352,6 +390,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return code;
   };
 
+  const cloudLogin = async (
+    companyCode: string,
+    mobile: string,
+    pin: string,
+    keepLoggedIn: boolean = true
+  ): Promise<{ success: boolean; error?: string; isLocked?: boolean }> => {
+    const res = await loginWithPin(companyCode, mobile, pin, keepLoggedIn);
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      localStorage.setItem('kn_finance_logged_in', 'true');
+      addActivity({
+        action: 'login',
+        performedByUserId: res.user.companyUserId,
+        performedByRole: res.user.role,
+        message: `${res.user.fullName} (${res.user.role}) logged in.`,
+      });
+      navigateTo('dashboard');
+      return { success: true };
+    }
+    return { success: false, error: res.error, isLocked: res.isLocked };
+  };
+
   const login = (mobileOrEmail: string, pin: string): { success: boolean; error?: string } => {
     if (!manager) {
       return { success: false, error: 'No manager account found. Please register first.' };
@@ -384,8 +444,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logout = () => {
+    signOutOfCloud().catch(() => {});
+    setCurrentUser(null);
     localStorage.removeItem('kn_finance_logged_in');
-    navigateTo('welcome');
+    navigateTo('login');
   };
 
   const updateCompany = (data: CompanyProfile) => {
@@ -725,6 +787,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         screen,
+        currentUser,
+        currentRole,
+        isCloudAuth,
         manager,
         company,
         agents: sanitizedAgents,
@@ -738,6 +803,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         navigateTo,
         registerManager,
         updateManager,
+        cloudLogin,
         login,
         logout,
         updateCompany,

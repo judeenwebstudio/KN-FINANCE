@@ -8,9 +8,9 @@ import type {
   PaymentRecord,
   ActivityLogEntry,
   AppSettings,
-} from '../types';
-import { DEFAULT_SETTINGS } from '../types';
-import { hashPinSync } from './security';
+} from '../types.ts';
+import { DEFAULT_SETTINGS } from '../types.ts';
+import { hashPinSync } from './security.ts';
 
 export const KN_FINANCE_STORAGE_KEYS = [
   'kn_finance_manager',

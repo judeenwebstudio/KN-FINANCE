@@ -21,6 +21,8 @@ import { resolveAgentName } from '../utils/agentUtils';
 
 export const DashboardScreen: React.FC = () => {
   const {
+    currentUser,
+    currentRole,
     borrowers,
     agents,
     timeframe,
@@ -68,8 +70,16 @@ export const DashboardScreen: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Role Scoped Borrowers: Agents see ONLY borrowers assigned to them
+  const roleScopedBorrowers = currentRole === 'agent'
+    ? borrowers.filter((b) =>
+        b.agentId === currentUser?.companyUserId ||
+        (b.assignedAgent && currentUser?.fullName && b.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+      )
+    : borrowers;
+
   // Filter borrowers by the selected timeframe (Daily, Weekly, Monthly)
-  const timeframeBorrowers = borrowers.filter((b) => (b.financeType || 'Daily') === timeframe);
+  const timeframeBorrowers = roleScopedBorrowers.filter((b) => (b.financeType || 'Daily') === timeframe);
 
   // Metrics calculated strictly from borrowers in the selected timeframe
   const activeCount = timeframeBorrowers.filter((b) => b.status === 'active').length;
@@ -309,13 +319,15 @@ export const DashboardScreen: React.FC = () => {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="h-10 px-4 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-            >
-              + Add Borrower
-            </button>
+            {currentRole === 'manager' && (
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="h-10 px-4 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+              >
+                + Add Borrower
+              </button>
+            )}
           </div>
         </div>
 

@@ -24,6 +24,17 @@ export interface CompanyProfile {
   officeAddress?: string;
 }
 
+export interface AuthUserSession {
+  companyUserId: string;
+  companyId: string;
+  fullName: string;
+  mobile: string;
+  role: 'manager' | 'agent';
+  status: 'active' | 'inactive';
+  companyCode: string;
+  companyName: string;
+}
+
 export interface AgentUser {
   id: string;
   fullName: string;
