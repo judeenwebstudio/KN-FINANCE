@@ -152,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (rpcErr) {
       console.error('[auth/bootstrap] Bootstrap RPC error:', rpcErr.message);
-      return res.status(500).json({ error: 'Manager account bootstrap failed.' });
+      return res.status(500).json({ error: 'Manager account bootstrap failed.', detail: rpcErr.message, code: rpcErr.code });
     }
 
     const result = Array.isArray(rpcData) ? rpcData[0] : rpcData;
