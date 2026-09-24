@@ -35,33 +35,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Authoritatively resolve Manager identity from cryptographically verified user metadata & database
     const meta = userData.user.user_metadata || {};
-    let managerId = meta.company_user_id || '';
-    let companyId = meta.company_id || '';
-    let role = meta.role || '';
+    const code = meta.company_code || '';
+    const role = meta.role || '';
 
-    if (!managerId || !companyId || role !== 'manager') {
-      const { data: dbProfile } = await supabaseAdmin
-        .from('company_users')
-        .select('id, company_id, role, status')
-        .eq('auth_user_id', userData.user.id)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (dbProfile) {
-        managerId = dbProfile.id;
-        companyId = dbProfile.company_id;
-        role = dbProfile.role;
-      }
-    }
-
-    if (!managerId || !companyId || role !== 'manager') {
+    if (role !== 'manager' || !code) {
       return res.status(403).json({ error: 'Forbidden: Only active company Managers can perform this operation.' });
     }
 
+    // Locate company by verified company_code
+    const { data: compData, error: compErr } = await supabaseAdmin
+      .from('companies')
+      .select('id')
+      .eq('company_code', code.toUpperCase())
+      .single();
+
+    if (compErr || !compData) {
+      return res.status(404).json({ error: 'Company not found.' });
+    }
+
+    const companyId = compData.id;
+
+    // Locate active manager in company_users
+    const { data: mgrData, error: mgrErr } = await supabaseAdmin
+      .from('company_users')
+      .select('id, role, status')
+      .eq('company_id', companyId)
+      .eq('role', 'manager')
+      .eq('status', 'active')
+      .single();
+
+    if (mgrErr || !mgrData) {
+      return res.status(403).json({ error: 'Forbidden: Active Manager profile not found.' });
+    }
+
     const managerProfile = {
-      id: managerId,
+      id: mgrData.id,
       company_id: companyId,
-      role,
+      role: 'manager',
       status: 'active'
     };
 
