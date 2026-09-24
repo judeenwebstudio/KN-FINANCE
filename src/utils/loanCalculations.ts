@@ -12,25 +12,34 @@ export function getTodayIsoDate(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function parseCustomDate(dateStr: string): Date | null {
+export function parseCustomDate(dateStr: unknown): Date | null {
   if (!dateStr) return null;
-  if (dateStr.includes('/')) {
-    const [d, m, y] = dateStr.split('/');
+  if (dateStr instanceof Date) {
+    return isNaN(dateStr.getTime()) ? null : dateStr;
+  }
+  if (typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('/')) {
+    const [d, m, y] = trimmed.split('/');
     const day = parseInt(d, 10);
     const monthIndex = parseInt(m, 10) - 1;
     const year = parseInt(y, 10);
     if (isNaN(day) || isNaN(monthIndex) || isNaN(year)) return null;
-    return new Date(year, monthIndex, day);
+    const dt = new Date(year, monthIndex, day);
+    return isNaN(dt.getTime()) ? null : dt;
   }
-  if (dateStr.includes('-')) {
-    const [y, m, d] = dateStr.split('-');
-    const day = parseInt(d, 10);
-    const monthIndex = parseInt(m, 10) - 1;
+  if (trimmed.includes('-')) {
+    const [y, m, d] = trimmed.split('-');
     const year = parseInt(y, 10);
+    const monthIndex = parseInt(m, 10) - 1;
+    const day = parseInt(d, 10);
     if (isNaN(day) || isNaN(monthIndex) || isNaN(year)) return null;
-    return new Date(year, monthIndex, day);
+    const dt = new Date(year, monthIndex, day);
+    return isNaN(dt.getTime()) ? null : dt;
   }
-  return null;
+  const fallback = new Date(trimmed);
+  return isNaN(fallback.getTime()) ? null : fallback;
 }
 
 export function toIsoDate(d: Date): string {
@@ -141,7 +150,7 @@ export function getAllocatedSchedule(
   const schedule = getBorrowerSchedule(borrower);
   const borrowerPayments = allPayments
     .filter((p) => p.borrowerId === borrower.id)
-    .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.createdAt.localeCompare(b.createdAt));
+    .sort((a, b) => (a.paymentDate || '').localeCompare(b.paymentDate || '') || (a.createdAt || '').localeCompare(b.createdAt || ''));
 
   // Clone installments for mutation during allocation
   const result: AllocatedInstallment[] = schedule.map((inst) => ({
@@ -250,11 +259,10 @@ export function getBorrowerLoanSummary(
   const borrowerPayments = allPayments.filter((p) => p.borrowerId === borrower.id);
   let lastPaymentDate = '-';
   if (borrowerPayments.length > 0) {
-    const sorted = [...borrowerPayments].sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+    const sorted = [...borrowerPayments].sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
     const latest = sorted[0];
-    if (latest) {
-      const [y, m, d] = latest.paymentDate.split('-');
-      lastPaymentDate = `${d}/${m}/${y}`;
+    if (latest && latest.paymentDate) {
+      lastPaymentDate = formatDisplayDate(latest.paymentDate);
     }
   }
 

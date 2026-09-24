@@ -102,29 +102,38 @@ function toDbDate(val?: string | null): string | null {
 
 function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
   const assignedAgentObj = allAgents.find(a => a.id === row.assigned_agent_id);
+  const loanAmt = Number(row.loan_amount) || Number(row.amount) || 0;
+  const deductedAmt = Number(row.deducted_amount) || 0;
+  const netAmt = row.net_amount_given !== null && row.net_amount_given !== undefined
+    ? Number(row.net_amount_given)
+    : Math.max(0, loanAmt - deductedAmt);
+  const expectedRet = Number(row.expected_return) || loanAmt;
+  const borrowerName = row.name || row.borrower_name || 'Borrower';
+  const phoneVal = row.phone || row.mobile || '';
+
   return {
     id: row.id,
-    name: row.name,
-    borrowerName: row.name,
-    phone: row.phone,
-    phoneNumber: row.phone,
+    name: borrowerName,
+    borrowerName: borrowerName,
+    phone: phoneVal,
+    phoneNumber: phoneVal,
     alternatePhoneNumber: row.alternate_phone || '',
     address: row.address || '',
     financeType: row.finance_type || 'Daily',
     agentId: row.assigned_agent_id || null,
     assignedAgent: assignedAgentObj?.fullName || '',
     parcelTokenMode: Boolean(row.parcel_token_mode),
-    amount: Number(row.loan_amount) || 0,
-    loanAmount: Number(row.loan_amount) || 0,
-    deductedAmount: Number(row.deducted_amount) || 0,
-    netAmountGiven: Number(row.net_amount_given) || ((Number(row.loan_amount) || 0) - (Number(row.deducted_amount) || 0)),
-    expectedReturn: Number(row.expected_return) || Number(row.loan_amount) || 0,
+    amount: loanAmt,
+    loanAmount: loanAmt,
+    deductedAmount: deductedAmt,
+    netAmountGiven: netAmt,
+    expectedReturn: expectedRet,
     interestRate: Number(row.interest_rate) || 0,
     repaymentDuration: row.repayment_duration || '50 Days',
     startDate: row.start_date || '',
     endDate: row.end_date || '',
     isExistingLoan: Boolean(row.existing_loan),
-    status: row.status || 'active',
+    status: (row.status as 'active' | 'closed') || 'active',
     dateAdded: row.created_at || new Date().toISOString(),
     createdAt: row.created_at || new Date().toISOString(),
   };
@@ -133,16 +142,16 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
 function mapDbPaymentToApp(row: any, allBorrowers: Borrower[], allAgents: AgentUser[], currentMgrName?: string): PaymentRecord {
   const borrowerObj = allBorrowers.find(b => b.id === row.borrower_id);
   const collectorAgent = allAgents.find(a => a.id === row.collected_by_user_id);
-  const isAgent = Boolean(collectorAgent);
+  const isAgent = Boolean(collectorAgent) || (row.collected_by_user_id && row.collected_by_user_id !== 'manager');
   return {
     id: row.id,
-    borrowerId: row.borrower_id,
+    borrowerId: row.borrower_id || '',
     borrowerName: borrowerObj?.borrowerName || borrowerObj?.name || 'Borrower',
     amount: Number(row.amount) || 0,
-    paymentDate: row.payment_date,
-    collectedByUserId: row.collected_by_user_id,
+    paymentDate: row.payment_date || '',
+    collectedByUserId: row.collected_by_user_id || null,
     collectedByRole: isAgent ? 'agent' : 'manager',
-    collectedBy: isAgent ? (collectorAgent?.fullName || 'Agent') : (currentMgrName || 'Manager'),
+    collectedBy: collectorAgent?.fullName || (isAgent ? 'Agent' : (currentMgrName || 'Manager')),
     financeType: row.finance_type || borrowerObj?.financeType || 'Daily',
     note: row.note || undefined,
     createdAt: row.created_at || new Date().toISOString(),
@@ -379,27 +388,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchCloudData = async () => {
     if (!supabase || !currentUser) return;
     try {
-      // 1. Fetch Agents (if manager)
+      // 1. Fetch Agents (Manager gets all agents, Agent gets their own profile)
       let currentAgentList = agents;
-      if (currentUser.role === 'manager') {
-        const { data: uData, error: uErr } = await (supabase as any)
-          .from('company_users')
-          .select('*')
-          .eq('company_id', currentUser.companyId)
-          .eq('role', 'agent')
-          .order('created_at', { ascending: true });
-        if (!uErr && uData) {
-          currentAgentList = (uData as any[]).map(u => ({
-            id: u.id,
-            fullName: u.full_name,
-            mobile: u.mobile,
-            role: 'agent' as const,
-            status: u.status as 'active' | 'inactive',
-            createdAt: u.created_at,
-            pinHash: '',
-          }));
-          setAgents(currentAgentList);
-        }
+      const { data: uData, error: uErr } = await (supabase as any)
+        .from('company_users')
+        .select('*')
+        .eq('company_id', currentUser.companyId)
+        .eq('role', 'agent')
+        .order('created_at', { ascending: true });
+
+      if (!uErr && uData && (uData as any[]).length > 0) {
+        currentAgentList = (uData as any[]).map(u => ({
+          id: u.id,
+          fullName: u.full_name,
+          mobile: u.mobile,
+          role: 'agent' as const,
+          status: u.status as 'active' | 'inactive',
+          createdAt: u.created_at,
+          pinHash: '',
+        }));
+        setAgents(currentAgentList);
+      } else if (currentUser.role === 'agent') {
+        currentAgentList = [{
+          id: currentUser.companyUserId,
+          fullName: currentUser.fullName,
+          mobile: currentUser.mobile,
+          role: 'agent' as const,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          pinHash: '',
+        }];
+        setAgents(currentAgentList);
       }
 
       // 2. Fetch Borrowers (RLS enforces company scope for manager, assigned-only for agent)
@@ -1087,11 +1106,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getBorrowerLastPaymentDate = (borrowerId: string): string => {
     const borrowerPayments = payments.filter(p => p.borrowerId === borrowerId);
     if (borrowerPayments.length === 0) return '-';
-    const sorted = [...borrowerPayments].sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+    const sorted = [...borrowerPayments].sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
     const latest = sorted[0];
-    if (!latest) return '-';
-    const [y, m, d] = latest.paymentDate.split('-');
-    return `${d}/${m}/${y}`;
+    if (!latest || !latest.paymentDate) return '-';
+    return formatDisplayDate(latest.paymentDate) || '-';
   };
 
   const getTodayCollectedAmount = (tf: Timeframe): number => {

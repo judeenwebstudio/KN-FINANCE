@@ -57,18 +57,29 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   }, [borrower, payments]);
 
   // Payments for this borrower, newest transaction first
+  // Payments for this borrower, newest transaction first
   const borrowerPayments = useMemo(() => {
     if (!borrower) return [];
     return payments
       .filter((p) => p.borrowerId === borrower.id)
-      .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
   }, [payments, borrower]);
 
-  if (!isOpen || !borrower || !loanSummary) return null;
+  // Check if borrower is assigned to the active user (Managers can view all, Agents only assigned)
+  const isAssignedToAgent = currentRole === 'manager' || (
+    borrower?.agentId === currentUser?.companyUserId ||
+    (borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+  );
+
+  // Security & visibility guard: Agents cannot view unassigned borrowers
+  if (!isOpen || !borrower || !loanSummary || (currentRole === 'agent' && !isAssignedToAgent)) return null;
 
   // Resolve assigned agent display name
   const assignedAgentDisplay = (() => {
     if (borrower.agentId) {
+      if (currentRole === 'agent' && currentUser?.companyUserId === borrower.agentId) {
+        return `${currentUser.fullName} (You)`;
+      }
       const found = agents.find((a) => a.id === borrower.agentId);
       if (found) {
         return found.status === 'inactive' ? `${found.fullName} (Inactive)` : found.fullName;
@@ -87,12 +98,6 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   })();
 
   const isClosed = borrower.status === 'closed' || loanSummary.totalPending <= 0;
-
-  // Check if borrower is assigned to the active user (Managers can view all, Agents only assigned)
-  const isAssignedToAgent = currentRole === 'manager' || (
-    borrower?.agentId === currentUser?.companyUserId ||
-    (borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
-  );
 
   // Open Collect Payment Dialog
   const handleOpenCollectPayment = () => {
