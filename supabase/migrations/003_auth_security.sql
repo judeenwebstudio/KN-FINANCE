@@ -202,6 +202,7 @@ RETURNS TABLE (
   role TEXT,
   user_status TEXT
 ) AS $$
+#variable_conflict use_column
 DECLARE
   v_norm_code TEXT := UPPER(TRIM(COALESCE(p_company_code, '')));
   v_norm_mobile TEXT := REGEXP_REPLACE(COALESCE(p_mobile, ''), '\D', '', 'g');
@@ -344,6 +345,7 @@ RETURNS TABLE (
   company_user_id UUID,
   message TEXT
 ) AS $$
+#variable_conflict use_column
 DECLARE
   v_norm_code TEXT := UPPER(TRIM(COALESCE(p_company_code, '')));
   v_norm_mobile TEXT := REGEXP_REPLACE(COALESCE(p_mobile, ''), '\D', '', 'g');
@@ -442,6 +444,7 @@ RETURNS TABLE (
   agent_id UUID,
   message TEXT
 ) AS $$
+#variable_conflict use_column
 DECLARE
   v_caller_mgr company_users;
   v_norm_mobile TEXT := REGEXP_REPLACE(COALESCE(p_mobile, ''), '\D', '', 'g');
@@ -523,6 +526,7 @@ RETURNS TABLE (
   status TEXT,
   message TEXT
 ) AS $$
+#variable_conflict use_column
 DECLARE
   v_caller_mgr company_users;
   v_agent company_users;
