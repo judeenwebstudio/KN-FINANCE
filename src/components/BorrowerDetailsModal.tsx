@@ -57,64 +57,12 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   }, [borrower, payments]);
 
   // Payments for this borrower, newest transaction first
-  // Payments for this borrower, newest transaction first
   const borrowerPayments = useMemo(() => {
     if (!borrower) return [];
     return payments
       .filter((p) => p.borrowerId === borrower.id)
       .sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
   }, [payments, borrower]);
-
-  // Check if borrower is assigned to the active user (Managers can view all, Agents only assigned)
-  const isAssignedToAgent = currentRole === 'manager' || (
-    borrower?.agentId === currentUser?.companyUserId ||
-    (borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
-  );
-
-  // Security & visibility guard: Agents cannot view unassigned borrowers
-  if (!isOpen || !borrower || !loanSummary || (currentRole === 'agent' && !isAssignedToAgent)) return null;
-
-  // Resolve assigned agent display name
-  const assignedAgentDisplay = (() => {
-    if (borrower.agentId) {
-      if (currentRole === 'agent' && currentUser?.companyUserId === borrower.agentId) {
-        return `${currentUser.fullName} (You)`;
-      }
-      const found = agents.find((a) => a.id === borrower.agentId);
-      if (found) {
-        return found.status === 'inactive' ? `${found.fullName} (Inactive)` : found.fullName;
-      }
-    }
-    if (borrower.assignedAgent && borrower.assignedAgent.trim()) {
-      const found = agents.find(
-        (a) => a.fullName.toLowerCase() === borrower.assignedAgent!.trim().toLowerCase()
-      );
-      if (found) {
-        return found.status === 'inactive' ? `${found.fullName} (Inactive)` : found.fullName;
-      }
-      return borrower.assignedAgent.trim();
-    }
-    return 'Unassigned';
-  })();
-
-  const isClosed = borrower.status === 'closed' || loanSummary.totalPending <= 0;
-
-  // Open Collect Payment Dialog
-  const handleOpenCollectPayment = () => {
-    if (loanSummary.totalPending <= 0) return;
-    if (currentRole === 'agent' && !isAssignedToAgent) return;
-    setPaymentAmount(
-      loanSummary.todayDue > 0
-        ? String(loanSummary.todayDue)
-        : String(loanSummary.totalPending)
-    );
-    setPaymentDate(getTodayIsoDate());
-    setCollectorSelection(currentRole === 'agent' ? `agent:${currentUser?.companyUserId || 'self'}` : 'manager');
-    setPaymentNote('');
-    setPaymentError(null);
-    setIsSubmittingPayment(false);
-    setIsCollectModalOpen(true);
-  };
 
   // Auto-dismiss payment banner after 4 seconds
   useEffect(() => {
@@ -138,6 +86,60 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
     }
     return `Manager (${manager?.fullName?.trim() || 'Sirajudeen'})`;
   }, [collectorSelection, agents, manager, currentRole, currentUser]);
+
+  // Resolve assigned agent display name
+  const assignedAgentDisplay = useMemo(() => {
+    if (!borrower) return 'Unassigned';
+    if (borrower.agentId) {
+      if (currentRole === 'agent' && currentUser?.companyUserId === borrower.agentId) {
+        return `${currentUser.fullName} (You)`;
+      }
+      const found = agents.find((a) => a.id === borrower.agentId);
+      if (found) {
+        return found.status === 'inactive' ? `${found.fullName} (Inactive)` : found.fullName;
+      }
+    }
+    if (borrower.assignedAgent && borrower.assignedAgent.trim()) {
+      const found = agents.find(
+        (a) => a.fullName.toLowerCase() === borrower.assignedAgent!.trim().toLowerCase()
+      );
+      if (found) {
+        return found.status === 'inactive' ? `${found.fullName} (Inactive)` : found.fullName;
+      }
+      return borrower.assignedAgent.trim();
+    }
+    return 'Unassigned';
+  }, [borrower, currentRole, currentUser, agents]);
+
+  // Check if borrower is assigned to the active user (Managers can view all, Agents only assigned)
+  const isAssignedToAgent = currentRole === 'manager' || (
+    Boolean(borrower?.agentId && currentUser?.companyUserId && borrower.agentId === currentUser.companyUserId) ||
+    Boolean(borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+  );
+
+  // Security & visibility guard: ALL HOOKS HAVE EXECUTED. Now safe to return null if closed or unauthorized.
+  if (!isOpen || !borrower || !loanSummary || (currentRole === 'agent' && !isAssignedToAgent)) {
+    return null;
+  }
+
+  const isClosed = borrower.status === 'closed' || loanSummary.totalPending <= 0;
+
+  // Open Collect Payment Dialog
+  const handleOpenCollectPayment = () => {
+    if (loanSummary.totalPending <= 0) return;
+    if (currentRole === 'agent' && !isAssignedToAgent) return;
+    setPaymentAmount(
+      loanSummary.todayDue > 0
+        ? String(loanSummary.todayDue)
+        : String(loanSummary.totalPending)
+    );
+    setPaymentDate(getTodayIsoDate());
+    setCollectorSelection(currentRole === 'agent' ? `agent:${currentUser?.companyUserId || 'self'}` : 'manager');
+    setPaymentNote('');
+    setPaymentError(null);
+    setIsSubmittingPayment(false);
+    setIsCollectModalOpen(true);
+  };
 
   const executeCommitPayment = async () => {
     const parsedAmount = parseFloat(paymentAmount);
