@@ -104,6 +104,8 @@ export interface DbBorrower {
   finance_type: DbFinanceType;
   loan_amount: number;
   deducted_amount: number;
+  agent_commission: number;
+  net_amount_given?: number | null;
   expected_return: number;
   interest_rate: number | null;
   repayment_duration: string | null;
@@ -127,6 +129,8 @@ export interface DbBorrowerInsert {
   finance_type: DbFinanceType;
   loan_amount: number;
   deducted_amount?: number;
+  agent_commission?: number;
+  net_amount_given?: number;
   expected_return: number;
   interest_rate?: number | null;
   repayment_duration?: string | null;
@@ -148,6 +152,8 @@ export interface DbBorrowerUpdate {
   finance_type?: DbFinanceType;
   loan_amount?: number;
   deducted_amount?: number;
+  agent_commission?: number;
+  net_amount_given?: number;
   expected_return?: number;
   interest_rate?: number | null;
   repayment_duration?: string | null;

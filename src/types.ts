@@ -59,6 +59,7 @@ export interface Borrower {
   financeType: 'Daily' | 'Weekly' | 'Monthly';
   agentId?: string | null;
   assignedAgent?: string;
+  agentCommission?: number;
   parcelTokenMode: boolean;
   amount: number; // loanAmount
   loanAmount: number;
@@ -83,6 +84,7 @@ export type NewBorrowerInput = {
   financeType: 'Daily' | 'Weekly' | 'Monthly';
   agentId?: string | null;
   assignedAgent?: string;
+  agentCommission?: number;
   parcelTokenMode: boolean;
   loanAmount: number;
   deductedAmount: number;

@@ -423,6 +423,13 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                 </div>
 
                 <div>
+                  <span className="text-slate-400 block text-[11px] font-medium">Agent Commission</span>
+                  <span className="font-semibold text-[#1e293b]">
+                    ₹{(borrower.agentCommission || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <div>
                   <span className="text-slate-400 block text-[11px] font-medium">Net Amount Given</span>
                   <span className="font-semibold text-[#1e293b]">
                     ₹{loanSummary.netAmountGiven.toLocaleString('en-IN')}

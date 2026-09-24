@@ -104,9 +104,10 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
   const assignedAgentObj = allAgents.find(a => a.id === row.assigned_agent_id);
   const loanAmt = Number(row.loan_amount) || Number(row.amount) || 0;
   const deductedAmt = Number(row.deducted_amount) || 0;
+  const agentComm = Number(row.agent_commission) || 0;
   const netAmt = row.net_amount_given !== null && row.net_amount_given !== undefined
     ? Number(row.net_amount_given)
-    : Math.max(0, loanAmt - deductedAmt);
+    : Math.max(0, loanAmt - deductedAmt - agentComm);
   const expectedRet = Number(row.expected_return) || loanAmt;
   const borrowerName = row.name || row.borrower_name || 'Borrower';
   const phoneVal = row.phone || row.mobile || '';
@@ -122,6 +123,7 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
     financeType: row.finance_type || 'Daily',
     agentId: row.assigned_agent_id || null,
     assignedAgent: assignedAgentObj?.fullName || '',
+    agentCommission: agentComm,
     parcelTokenMode: Boolean(row.parcel_token_mode),
     amount: loanAmt,
     loanAmount: loanAmt,
@@ -280,7 +282,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         amount: item.amount || item.loanAmount || 0,
         loanAmount: item.loanAmount || item.amount || 0,
         deductedAmount: item.deductedAmount || 0,
-        netAmountGiven: item.netAmountGiven || (item.loanAmount || item.amount || 0) - (item.deductedAmount || 0),
+        agentCommission: item.agentCommission || 0,
+        netAmountGiven: item.netAmountGiven ?? Math.max(0, (item.loanAmount || item.amount || 0) - (item.deductedAmount || 0) - (item.agentCommission || 0)),
         expectedReturn: item.expectedReturn || item.amount || 0,
         interestRate: item.interestRate || 0,
         repaymentDuration: item.repaymentDuration || '50 Days',
@@ -850,6 +853,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             assigned_agent_id: data.agentId || null,
             loan_amount: data.loanAmount,
             deducted_amount: data.deductedAmount,
+            agent_commission: Number(data.agentCommission) || 0,
             net_amount_given: data.netAmountGiven,
             expected_return: data.expectedReturn,
             interest_rate: data.interestRate,
@@ -880,6 +884,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: Date.now().toString(),
       ...data,
       agentId: data.agentId !== undefined ? data.agentId : null,
+      agentCommission: Number(data.agentCommission) || 0,
       name: data.borrowerName,
       phone: data.phoneNumber,
       amount: data.loanAmount,
@@ -889,7 +894,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBorrowers(prev => [newBorrower, ...prev]);
 
-    const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0));
+    const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0) - (newBorrower.agentCommission || 0));
     if (netDisbursed > 0) {
       const ledgerEntry: CashLedgerEntry = {
         id: `cash_loan_${newBorrower.id}_${Date.now()}`,
@@ -933,6 +938,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.address !== undefined) updatePayload.address = data.address.trim() || null;
         if (data.financeType !== undefined) updatePayload.finance_type = data.financeType;
         if (data.agentId !== undefined) updatePayload.assigned_agent_id = data.agentId || null;
+        if (data.agentCommission !== undefined) updatePayload.agent_commission = data.agentCommission;
         if (data.loanAmount !== undefined) updatePayload.loan_amount = data.loanAmount;
         if (data.deductedAmount !== undefined) updatePayload.deducted_amount = data.deductedAmount;
         if (data.netAmountGiven !== undefined) updatePayload.net_amount_given = data.netAmountGiven;
@@ -973,6 +979,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...borrower,
           ...data,
+          agentCommission: data.agentCommission !== undefined ? data.agentCommission : (borrower.agentCommission || 0),
           name: data.borrowerName !== undefined ? data.borrowerName : borrower.name,
           borrowerName: data.borrowerName !== undefined ? data.borrowerName : borrower.borrowerName,
           phone: data.phoneNumber !== undefined ? data.phoneNumber : borrower.phone,
