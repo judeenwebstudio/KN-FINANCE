@@ -15,12 +15,14 @@ import { useApp } from '../context/AppContext';
 import { MyCompanyModal } from './MyCompanyModal';
 import { ManageUsersModal } from './ManageUsersModal';
 import { ActivityLogModal } from './ActivityLogModal';
+import { BackupRestoreModal } from './BackupRestoreModal';
 
 export const ProfileScreen: React.FC = () => {
   const { manager, logout, navigateTo } = useApp();
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
+  const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState(false);
 
   const menuItems = [
     { label: 'My Company', icon: Building2 },
@@ -43,6 +45,8 @@ export const ProfileScreen: React.FC = () => {
       setIsManageUsersOpen(true);
     } else if (label === 'Activity Log') {
       setIsActivityLogOpen(true);
+    } else if (label === 'Backup & Restore') {
+      setIsBackupRestoreOpen(true);
     }
   };
 
@@ -153,6 +157,12 @@ export const ProfileScreen: React.FC = () => {
       <ActivityLogModal
         isOpen={isActivityLogOpen}
         onClose={() => setIsActivityLogOpen(false)}
+      />
+
+      {/* Backup & Restore Modal */}
+      <BackupRestoreModal
+        isOpen={isBackupRestoreOpen}
+        onClose={() => setIsBackupRestoreOpen(false)}
       />
     </div>
   );

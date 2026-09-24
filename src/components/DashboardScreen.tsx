@@ -7,6 +7,7 @@ import {
   ChevronDown,
   User,
   Search,
+  CheckCircle2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Timeframe } from '../types';
@@ -40,7 +41,21 @@ export const DashboardScreen: React.FC = () => {
   const [isDueTodayModalOpen, setIsDueTodayModalOpen] = useState(false);
   const [isFinancialAnalyticsModalOpen, setIsFinancialAnalyticsModalOpen] = useState(false);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
+  const [restoreSuccessToast, setRestoreSuccessToast] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('kn_finance_restore_success') === 'true') {
+        sessionStorage.removeItem('kn_finance_restore_success');
+        setRestoreSuccessToast(true);
+        const timer = setTimeout(() => setRestoreSuccessToast(false), 4500);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      // ignore storage error
+    }
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -81,7 +96,15 @@ export const DashboardScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#f6f7fb] w-full">
+    <div className="flex flex-col min-h-screen bg-[#f6f7fb] w-full relative">
+      {/* Post-restore success toast */}
+      {restoreSuccessToast && (
+        <div className="fixed top-5 right-5 z-50 p-4 bg-emerald-600 text-white rounded-2xl shadow-xl flex items-center gap-3 animate-in slide-in-from-top-3 duration-200">
+          <CheckCircle2 size={20} className="shrink-0 text-white" />
+          <span className="text-xs sm:text-sm font-semibold">Backup restored successfully.</span>
+        </div>
+      )}
+
       {/* Top Header - Spans Full Width */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">

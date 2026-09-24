@@ -12,6 +12,8 @@ import {
   UserMinus,
   Building2,
   KeyRound,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { ActivityAction, ActivityLogEntry } from '../types';
@@ -51,7 +53,9 @@ export const ActivityLogModal: React.FC<ActivityLogModalProps> = ({ isOpen, onCl
           action === 'login' ||
           action === 'manager_updated' ||
           action === 'company_updated' ||
-          action === 'pin_changed'
+          action === 'pin_changed' ||
+          action === 'backup_created' ||
+          action === 'backup_restored'
         );
       case 'All':
       default:
@@ -153,6 +157,18 @@ export const ActivityLogModal: React.FC<ActivityLogModalProps> = ({ isOpen, onCl
         return (
           <div className="w-9 h-9 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
             <KeyRound size={18} />
+          </div>
+        );
+      case 'backup_created':
+        return (
+          <div className="w-9 h-9 rounded-full bg-indigo-50 text-[#4f46e5] flex items-center justify-center shrink-0">
+            <Download size={18} />
+          </div>
+        );
+      case 'backup_restored':
+        return (
+          <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Upload size={18} />
           </div>
         );
       default:

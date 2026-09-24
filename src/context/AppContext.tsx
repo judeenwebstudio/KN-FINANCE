@@ -12,7 +12,7 @@ import type {
   NewBorrowerInput,
   ActivityLogEntry,
 } from '../types';
-import { hashPin } from '../utils/security';
+import { hashPin, hashPinSync } from '../utils/security';
 
 export type { NewBorrowerInput };
 
@@ -270,6 +270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const code = generateCompanyCode();
     const newManager: ManagerAccount = {
       ...data,
+      pinHash: hashPinSync(data.pin),
       companyCode: code,
     };
     setManager(newManager);
@@ -292,7 +293,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!matchesUser) {
       return { success: false, error: 'Invalid Mobile Number or Email Address.' };
     }
-    if (manager.pin !== pin) {
+
+    const matchesPin =
+      (manager.pin && manager.pin === pin) ||
+      (manager.pinHash && hashPinSync(pin) === manager.pinHash);
+
+    if (!matchesPin) {
       return { success: false, error: 'Incorrect 4-digit PIN.' };
     }
 
@@ -343,6 +349,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fullName: data.fullName !== undefined ? data.fullName.trim() : prev.fullName,
         mobile: data.mobile !== undefined ? data.mobile.trim() : prev.mobile,
         pin: data.pin !== undefined ? data.pin.trim() : prev.pin,
+        pinHash: data.pin !== undefined ? hashPinSync(data.pin.trim()) : prev.pinHash,
       };
       localStorage.setItem('kn_finance_manager', JSON.stringify(updated));
       return updated;

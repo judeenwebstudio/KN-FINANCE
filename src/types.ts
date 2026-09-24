@@ -10,7 +10,8 @@ export interface ManagerAccount {
   fullName: string;
   email: string;
   mobile: string;
-  pin: string;
+  pin?: string;
+  pinHash?: string;
   companyCode: string;
   keepLoggedIn: boolean;
 }
@@ -111,7 +112,9 @@ export type ActivityAction =
   | 'agent_deactivated'
   | 'manager_updated'
   | 'company_updated'
-  | 'pin_changed';
+  | 'pin_changed'
+  | 'backup_created'
+  | 'backup_restored';
 
 export interface ActivityLogEntry {
   id: string;
@@ -125,3 +128,27 @@ export interface ActivityLogEntry {
   message: string;
   createdAt: string; // ISO string
 }
+
+export interface BackupMetadata {
+  app: 'KN FINANCE';
+  backupVersion: 1;
+  createdAt: string; // ISO string
+}
+
+export interface KNFinanceBackupData {
+  manager: Omit<ManagerAccount, 'pin' | 'pinHash'> | null;
+  company: CompanyProfile | null;
+  agents: AgentUser[];
+  borrowers: Borrower[];
+  payments: PaymentRecord[];
+  activityLogs: ActivityLogEntry[];
+  auth?: {
+    managerPinHash?: string;
+    agentPinHashes?: Record<string, string>;
+  };
+}
+
+export interface KNFinanceBackup extends BackupMetadata {
+  data: KNFinanceBackupData;
+}
+
