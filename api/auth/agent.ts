@@ -33,47 +33,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Invalid or expired manager session.' });
     }
 
-    // Authoritatively resolve Manager identity from cryptographically verified user metadata & database
+    // Authoritatively verify Manager role from cryptographically verified token
     const meta = userData.user.user_metadata || {};
-    const code = meta.company_code || '';
+    const companyCode = String(meta.company_code || '').trim().toUpperCase();
     const role = meta.role || '';
 
-    if (role !== 'manager' || !code) {
+    if (role !== 'manager' || !companyCode) {
       return res.status(403).json({ error: 'Forbidden: Only active company Managers can perform this operation.' });
     }
-
-    // Locate company by verified company_code
-    const { data: compData, error: compErr } = await supabaseAdmin
-      .from('companies')
-      .select('id')
-      .eq('company_code', code.toUpperCase())
-      .single();
-
-    if (compErr || !compData) {
-      return res.status(404).json({ error: 'Company not found.' });
-    }
-
-    const companyId = compData.id;
-
-    // Locate active manager in company_users
-    const { data: mgrData, error: mgrErr } = await supabaseAdmin
-      .from('company_users')
-      .select('id, role, status')
-      .eq('company_id', companyId)
-      .eq('role', 'manager')
-      .eq('status', 'active')
-      .single();
-
-    if (mgrErr || !mgrData) {
-      return res.status(403).json({ error: 'Forbidden: Active Manager profile not found.' });
-    }
-
-    const managerProfile = {
-      id: mgrData.id,
-      company_id: companyId,
-      role: 'manager',
-      status: 'active'
-    };
 
     // 2. Handle POST: Create Agent
     if (req.method === 'POST') {
@@ -95,20 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'PIN must be exactly 4 numeric digits.' });
       }
 
-      // Check if mobile already exists in this company before creating auth identity
-      const { data: existingUser } = await supabaseAdmin
-        .from('company_users')
-        .select('id')
-        .eq('company_id', managerProfile.company_id)
-        .eq('mobile', normMobile)
-        .maybeSingle();
-
-      if (existingUser) {
-        return res.status(400).json({ error: 'A user with this mobile number already exists in your company.' });
-      }
-
-      // Create Agent Auth Identity
-      const internalEmail = `u_agent_${normMobile}_${managerProfile.company_id.substring(0, 8)}@knfinance.internal`;
+      // Create Agent Auth Identity in GoTrue
+      const internalEmail = `u_agent_${normMobile}_${companyCode.toLowerCase()}@knfinance.internal`;
       let authUserId: string;
 
       const { data: newAuthUser, error: authCreateErr } = await supabaseAdmin.auth.admin.createUser({
@@ -117,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         user_metadata: {
           role: 'agent',
           full_name: cleanName,
-          company_id: managerProfile.company_id,
+          company_code: companyCode,
         }
       });
 
@@ -133,9 +88,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         authUserId = existing.id;
       }
 
-      // Execute database-level agent creation using authoritative manager profile ID
+      // Execute database-level agent creation transaction using companyCode
       const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc('manager_create_cloud_agent', {
-        p_manager_user_id: managerProfile.id,
+        p_company_code: companyCode,
         p_full_name: cleanName,
         p_mobile: normMobile,
         p_pin: cleanPin,

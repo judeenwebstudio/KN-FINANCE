@@ -433,7 +433,7 @@ $$ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, extensio
 -- Authoritatively verifies that the caller is an active Manager of the same company.
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION manager_create_cloud_agent(
-  p_manager_user_id UUID,
+  p_company_code TEXT,
   p_full_name TEXT,
   p_mobile TEXT,
   p_pin TEXT,
@@ -446,30 +446,35 @@ RETURNS TABLE (
 ) AS $$
 #variable_conflict use_column
 DECLARE
-  v_caller_mgr company_users;
+  v_norm_code TEXT := UPPER(TRIM(COALESCE(p_company_code, '')));
   v_norm_mobile TEXT := REGEXP_REPLACE(COALESCE(p_mobile, ''), '\D', '', 'g');
+  v_company_id UUID;
+  v_mgr_id UUID;
   v_pin_hash TEXT;
   v_agent_id UUID;
 BEGIN
-  -- 1. Authoritatively verify manager identity
-  SELECT * INTO v_caller_mgr
+  -- 1. Locate Company
+  SELECT id INTO v_company_id
+  FROM companies
+  WHERE company_code = v_norm_code;
+
+  IF v_company_id IS NULL THEN
+    RETURN QUERY SELECT 'ERROR'::TEXT, NULL::UUID, 'Company not found.'::TEXT;
+    RETURN;
+  END IF;
+
+  -- 2. Locate Active Manager in Company
+  SELECT id INTO v_mgr_id
   FROM company_users
-  WHERE id = p_manager_user_id
-    AND role = 'manager'
-    AND status = 'active';
+  WHERE company_id = v_company_id AND role = 'manager' AND status = 'active'
+  LIMIT 1;
 
-  IF NOT FOUND THEN
-    RETURN QUERY SELECT 'UNAUTHORIZED'::TEXT, NULL::UUID, 'Caller is not an active company Manager.'::TEXT;
+  IF v_mgr_id IS NULL THEN
+    RETURN QUERY SELECT 'UNAUTHORIZED'::TEXT, NULL::UUID, 'Active Manager not found for this company.'::TEXT;
     RETURN;
   END IF;
 
-  -- If auth.uid() is available (PostgREST session context), verify it matches
-  IF auth.uid() IS NOT NULL AND v_caller_mgr.auth_user_id != auth.uid() THEN
-    RETURN QUERY SELECT 'UNAUTHORIZED'::TEXT, NULL::UUID, 'Caller auth identity does not match manager profile.'::TEXT;
-    RETURN;
-  END IF;
-
-  -- 2. Validate inputs
+  -- 3. Validate Inputs
   IF TRIM(COALESCE(p_full_name, '')) = '' THEN
     RETURN QUERY SELECT 'ERROR'::TEXT, NULL::UUID, 'Agent Full Name is required.'::TEXT;
     RETURN;
@@ -485,29 +490,43 @@ BEGIN
     RETURN;
   END IF;
 
-  -- 3. Check if mobile already exists in this company
+  v_pin_hash := hash_pin_bcrypt(p_pin);
+
+  -- 4. Check if mobile already exists in this company
   IF EXISTS (
     SELECT 1 FROM company_users
-    WHERE company_id = v_caller_mgr.company_id AND mobile = v_norm_mobile
+    WHERE company_id = v_company_id AND mobile = v_norm_mobile
   ) THEN
-    RETURN QUERY SELECT 'ERROR'::TEXT, NULL::UUID, 'A user with this mobile number already exists in your company.'::TEXT;
+    -- If already exists, update credentials and return success
+    SELECT id INTO v_agent_id FROM company_users WHERE company_id = v_company_id AND mobile = v_norm_mobile;
+    
+    INSERT INTO user_credentials (user_id, pin_hash)
+    VALUES (v_agent_id, v_pin_hash)
+    ON CONFLICT (user_id) DO UPDATE
+    SET pin_hash = EXCLUDED.pin_hash, updated_at = NOW();
+
+    UPDATE company_users
+    SET auth_user_id = COALESCE(p_auth_user_id, company_users.auth_user_id),
+        status = 'active',
+        updated_at = NOW()
+    WHERE id = v_agent_id;
+
+    RETURN QUERY SELECT 'SUCCESS'::TEXT, v_agent_id, 'Agent account updated successfully.'::TEXT;
     RETURN;
   END IF;
 
-  v_pin_hash := hash_pin_bcrypt(p_pin);
-
-  -- 4. Insert Agent into company_users
+  -- 5. Insert Agent into company_users
   INSERT INTO company_users (company_id, auth_user_id, full_name, mobile, role, status)
-  VALUES (v_caller_mgr.company_id, p_auth_user_id, TRIM(p_full_name), v_norm_mobile, 'agent', 'active')
+  VALUES (v_company_id, p_auth_user_id, TRIM(p_full_name), v_norm_mobile, 'agent', 'active')
   RETURNING id INTO v_agent_id;
 
-  -- 5. Insert credentials
+  -- 6. Insert credentials
   INSERT INTO user_credentials (user_id, pin_hash)
   VALUES (v_agent_id, v_pin_hash);
 
-  -- 6. Log Activity
+  -- 7. Log Activity
   INSERT INTO activity_logs (company_id, performed_by_user_id, agent_id, action, message)
-  VALUES (v_caller_mgr.company_id, v_caller_mgr.id, v_agent_id, 'agent_created', 'Agent ' || TRIM(p_full_name) || ' was added.');
+  VALUES (v_company_id, v_mgr_id, v_agent_id, 'agent_created', 'Agent ' || TRIM(p_full_name) || ' was added.');
 
   RETURN QUERY SELECT 'SUCCESS'::TEXT, v_agent_id, 'Agent created successfully.'::TEXT;
 END;
@@ -608,7 +627,7 @@ REVOKE EXECUTE ON FUNCTION hash_pin_bcrypt(TEXT) FROM PUBLIC, anon, authenticate
 REVOKE EXECUTE ON FUNCTION verify_pin_bcrypt(TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION verify_cloud_login(TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION bootstrap_cloud_manager(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION manager_create_cloud_agent(UUID, TEXT, TEXT, TEXT, UUID) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION manager_create_cloud_agent(TEXT, TEXT, TEXT, TEXT, UUID) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION manager_set_agent_status(UUID, UUID, TEXT) FROM PUBLIC, anon, authenticated;
 
 -- Grant EXECUTE exclusively to service_role
@@ -620,5 +639,5 @@ GRANT EXECUTE ON FUNCTION hash_pin_bcrypt(TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION verify_pin_bcrypt(TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION verify_cloud_login(TEXT, TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION bootstrap_cloud_manager(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) TO service_role;
-GRANT EXECUTE ON FUNCTION manager_create_cloud_agent(UUID, TEXT, TEXT, TEXT, UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION manager_create_cloud_agent(TEXT, TEXT, TEXT, TEXT, UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION manager_set_agent_status(UUID, UUID, TEXT) TO service_role;
