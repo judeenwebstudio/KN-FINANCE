@@ -182,8 +182,69 @@ export const DashboardScreen: React.FC = () => {
 
       {/* Main Content Area - Responsive Container max-width 1200px - 1400px */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        {/* Metric Cards: 6 cards for Manager (3x2 on tablet, 6 in row on XL), 4 cards for Agent */}
-        <div className={`grid gap-3.5 sm:gap-5 ${currentRole === 'manager' ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4'}`}>
+        {/* TOP ROW — PRIMARY FINANCIAL CARDS (Manager Only, 2-column prominent desktop layout) */}
+        {currentRole === 'manager' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+            {/* CARD 1: Cash in Hand (Clickable to open Cash in Hand Modal) */}
+            <div
+              onClick={() => setIsCashInHandModalOpen(true)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setIsCashInHandModalOpen(true);
+                }
+              }}
+              className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-emerald-100/80 hover:border-emerald-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-emerald-700/80 group-hover:text-emerald-700 transition-colors">
+                    Cash in Hand
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Available Company Cash</p>
+                </div>
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
+                  <Wallet size={22} />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
+                ₹{cashInHand.toLocaleString('en-IN')}
+              </div>
+            </div>
+
+            {/* CARD 2: Out Flow (Clickable to open Out Flow Breakdown Modal) */}
+            <div
+              onClick={() => setIsOutFlowModalOpen(true)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setIsOutFlowModalOpen(true);
+                }
+              }}
+              className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-rose-100/80 hover:border-rose-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-rose-700/80 group-hover:text-rose-700 transition-colors">
+                    Out Flow
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Total Loans &amp; Reductions</p>
+                </div>
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-all shadow-sm">
+                  <TrendingDown size={22} />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
+                ₹{outFlow.toLocaleString('en-IN')}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECOND ROW — OPERATIONAL CARDS (4-column layout on desktop, 2x2 on mobile/tablet) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-5">
           {/* CARD 1: Active Borrowers (Clickable to open Active Borrowers Modal) */}
           <div
             onClick={() => setIsActiveBorrowersModalOpen(true)}
@@ -283,61 +344,6 @@ export const DashboardScreen: React.FC = () => {
               {dueTodayCount}
             </div>
           </div>
-
-          {/* Manager-only Cards: Cash in Hand & Out Flow */}
-          {currentRole === 'manager' && (
-            <>
-              {/* CARD 5: Cash in Hand (Clickable to open Cash in Hand Modal) */}
-              <div
-                onClick={() => setIsCashInHandModalOpen(true)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    setIsCashInHandModalOpen(true);
-                  }
-                }}
-                className="bg-white rounded-2xl p-4 sm:p-5 lg:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between cursor-pointer hover:border-emerald-300 hover:shadow-md active:scale-[0.99] transition-all group"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs sm:text-sm font-semibold text-[#64748b] group-hover:text-emerald-600 transition-colors">
-                    Cash in Hand
-                  </span>
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                    <Wallet size={18} />
-                  </div>
-                </div>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#1e293b]">
-                  ₹{cashInHand.toLocaleString('en-IN')}
-                </div>
-              </div>
-
-              {/* CARD 6: Out Flow (Clickable to open Out Flow Breakdown Modal) */}
-              <div
-                onClick={() => setIsOutFlowModalOpen(true)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    setIsOutFlowModalOpen(true);
-                  }
-                }}
-                className="bg-white rounded-2xl p-4 sm:p-5 lg:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between cursor-pointer hover:border-rose-300 hover:shadow-md active:scale-[0.99] transition-all group"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs sm:text-sm font-semibold text-[#64748b] group-hover:text-rose-600 transition-colors">
-                    Out Flow
-                  </span>
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-colors">
-                    <TrendingDown size={18} />
-                  </div>
-                </div>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#1e293b]">
-                  ₹{outFlow.toLocaleString('en-IN')}
-                </div>
-              </div>
-            </>
-          )}
         </div>
 
         {/* Dashboard Control Card - Full-width desktop responsive bar */}
