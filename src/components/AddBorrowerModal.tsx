@@ -72,14 +72,17 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   initialBorrower,
   onUpdate,
 }) => {
-  const { addBorrower, timeframe, agents } = useApp();
+  const { addBorrower, timeframe, agents, settings } = useApp();
+
+  // Determine initial default finance type from settings or timeframe
+  const defaultType = settings?.defaultFinanceType || timeframe || 'Daily';
 
   // Form Fields
   const [borrowerName, setBorrowerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [alternatePhoneNumber, setAlternatePhoneNumber] = useState('');
   const [address, setAddress] = useState('');
-  const [financeType, setFinanceType] = useState<Timeframe>(timeframe || 'Daily');
+  const [financeType, setFinanceType] = useState<Timeframe>(defaultType);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [parcelTokenMode, setParcelTokenMode] = useState(false);
   const [loanAmount, setLoanAmount] = useState('');
@@ -118,12 +121,13 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setRepaymentDuration(initialBorrower.repaymentDuration || '50 Days');
         setIsExistingLoan(Boolean(initialBorrower.isExistingLoan));
       } else {
+        const initialType = settings?.defaultFinanceType || timeframe || 'Daily';
         setBorrowerName('');
         setPhoneNumber('');
         setAlternatePhoneNumber('');
         setAddress('');
-        setFinanceType(timeframe || 'Daily');
-        const initialDurations = DURATION_OPTIONS[timeframe || 'Daily'];
+        setFinanceType(initialType);
+        const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
         setStartDateIso(getTodayIsoDate());
         setSelectedAgentId('');
@@ -135,7 +139,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       }
       setErrors({});
     }
-  }, [isOpen, timeframe, initialBorrower]);
+  }, [isOpen, timeframe, initialBorrower, settings?.defaultFinanceType]);
 
   // When financeType changes, adjust repaymentDuration default
   const handleFinanceTypeChange = (newType: Timeframe) => {

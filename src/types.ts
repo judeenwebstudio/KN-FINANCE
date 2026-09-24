@@ -114,7 +114,9 @@ export type ActivityAction =
   | 'company_updated'
   | 'pin_changed'
   | 'backup_created'
-  | 'backup_restored';
+  | 'backup_restored'
+  | 'settings_updated'
+  | 'settings_reset';
 
 export interface ActivityLogEntry {
   id: string;
@@ -129,6 +131,29 @@ export interface ActivityLogEntry {
   createdAt: string; // ISO string
 }
 
+export type Language = 'en' | 'ta';
+export type AppDateFormat = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+
+export interface AppSettings {
+  language: Language;
+  dateFormat: AppDateFormat;
+  paymentSoundAlert: boolean;
+  paymentBannerAlert: boolean;
+  confirmBeforePayment: boolean;
+  defaultFinanceType: 'Daily' | 'Weekly' | 'Monthly';
+  keepLoggedIn: boolean;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  language: 'en',
+  dateFormat: 'DD/MM/YYYY',
+  paymentSoundAlert: true,
+  paymentBannerAlert: true,
+  confirmBeforePayment: true,
+  defaultFinanceType: 'Daily',
+  keepLoggedIn: true,
+};
+
 export interface BackupMetadata {
   app: 'KN FINANCE';
   backupVersion: 1;
@@ -142,6 +167,7 @@ export interface KNFinanceBackupData {
   borrowers: Borrower[];
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
+  settings?: AppSettings;
   auth?: {
     managerPinHash?: string;
     agentPinHashes?: Record<string, string>;

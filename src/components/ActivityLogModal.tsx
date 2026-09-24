@@ -14,6 +14,7 @@ import {
   KeyRound,
   Download,
   Upload,
+  Sliders,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { ActivityAction, ActivityLogEntry } from '../types';
@@ -27,7 +28,7 @@ interface ActivityLogModalProps {
 type FilterCategory = 'All' | 'Payments' | 'Borrowers' | 'Users' | 'Account';
 
 export const ActivityLogModal: React.FC<ActivityLogModalProps> = ({ isOpen, onClose }) => {
-  const { activityLogs, manager, agents } = useApp();
+  const { activityLogs, manager, agents, settings } = useApp();
   const [selectedFilter, setSelectedFilter] = useState<FilterCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -55,7 +56,9 @@ export const ActivityLogModal: React.FC<ActivityLogModalProps> = ({ isOpen, onCl
           action === 'company_updated' ||
           action === 'pin_changed' ||
           action === 'backup_created' ||
-          action === 'backup_restored'
+          action === 'backup_restored' ||
+          action === 'settings_updated' ||
+          action === 'settings_reset'
         );
       case 'All':
       default:
@@ -171,6 +174,18 @@ export const ActivityLogModal: React.FC<ActivityLogModalProps> = ({ isOpen, onCl
             <Upload size={18} />
           </div>
         );
+      case 'settings_updated':
+        return (
+          <div className="w-9 h-9 rounded-full bg-indigo-50 text-[#4f46e5] flex items-center justify-center shrink-0">
+            <Sliders size={18} />
+          </div>
+        );
+      case 'settings_reset':
+        return (
+          <div className="w-9 h-9 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Sliders size={18} />
+          </div>
+        );
       default:
         return (
           <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
@@ -278,7 +293,7 @@ export const ActivityLogModal: React.FC<ActivityLogModalProps> = ({ isOpen, onCl
             <div className="divide-y divide-slate-100">
               {filteredLogs.map((entry: ActivityLogEntry) => {
                 const performerName = resolvePerformerName(entry, manager, agents);
-                const dateTimeStr = formatActivityDateTime(entry.createdAt);
+                const dateTimeStr = formatActivityDateTime(entry.createdAt, settings.dateFormat);
 
                 return (
                   <div

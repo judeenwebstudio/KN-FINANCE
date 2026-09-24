@@ -7,7 +7,9 @@ import type {
   Borrower,
   PaymentRecord,
   ActivityLogEntry,
+  AppSettings,
 } from '../types';
+import { DEFAULT_SETTINGS } from '../types';
 import { hashPinSync } from './security';
 
 export const KN_FINANCE_STORAGE_KEYS = [
@@ -17,6 +19,7 @@ export const KN_FINANCE_STORAGE_KEYS = [
   'kn_finance_borrowers',
   'kn_finance_payments',
   'kn_finance_activity_logs',
+  'kn_finance_settings',
 ] as const;
 
 export interface BackupValidationResult {
@@ -36,6 +39,7 @@ export function createBackupPayload(params: {
   borrowers: Borrower[];
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
+  settings?: AppSettings;
 }): { backup: KNFinanceBackup; filename: string; backupActivity: ActivityLogEntry } {
   const now = new Date();
   const year = now.getFullYear();
@@ -95,6 +99,20 @@ export function createBackupPayload(params: {
     // fallback if localStorage not accessible
   }
 
+  let currentSettings: AppSettings = DEFAULT_SETTINGS;
+  if (params.settings) {
+    currentSettings = params.settings;
+  } else {
+    try {
+      const saved = localStorage.getItem('kn_finance_settings');
+      if (saved) {
+        currentSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      }
+    } catch {
+      // fallback
+    }
+  }
+
   const backup: KNFinanceBackup = {
     app: 'KN FINANCE',
     backupVersion: 1,
@@ -106,6 +124,7 @@ export function createBackupPayload(params: {
       borrowers: params.borrowers,
       payments: params.payments,
       activityLogs: [backupActivity, ...params.activityLogs],
+      settings: currentSettings,
       auth: {
         managerPinHash: managerPinHash || undefined,
         agentPinHashes: Object.keys(agentPinHashes).length > 0 ? agentPinHashes : undefined,
@@ -201,6 +220,13 @@ export function validateBackupFile(fileContent: string): BackupValidationResult 
     }
     const mgr = data.manager as Record<string, unknown>;
     if (!mgr.fullName || typeof mgr.fullName !== 'string') {
+      return { isValid: false, error: 'This is not a valid KN FINANCE backup file.' };
+    }
+  }
+
+  // Verify settings if present (optional for backward compatibility)
+  if (data.settings !== undefined && data.settings !== null) {
+    if (typeof data.settings !== 'object' || Array.isArray(data.settings)) {
       return { isValid: false, error: 'This is not a valid KN FINANCE backup file.' };
     }
   }
@@ -335,6 +361,12 @@ export function performSafeRestore(backup: KNFinanceBackup): { success: boolean;
 
     const finalActivityLogs = [restoreActivity, ...(backup.data.activityLogs || [])];
     newValues['kn_finance_activity_logs'] = JSON.stringify(finalActivityLogs);
+
+    // Restore Settings: Merge with DEFAULT_SETTINGS if old backup has no settings
+    const restoredSettings: AppSettings = backup.data.settings
+      ? { ...DEFAULT_SETTINGS, ...backup.data.settings }
+      : DEFAULT_SETTINGS;
+    newValues['kn_finance_settings'] = JSON.stringify(restoredSettings);
 
     // 3. Perform atomic write of whitelisted keys
     for (const [key, serialized] of Object.entries(newValues)) {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, Image as ImageIcon, Printer, X } from 'lucide-react';
-import { useApp, getTodayIsoDate, formatDisplayDate } from '../context/AppContext';
+import { useApp, getTodayIsoDate } from '../context/AppContext';
 import { resolveCollectorName } from '../utils/agentUtils';
+import { formatAppDate } from '../utils/dateUtils';
 
 interface CollectionsModalProps {
   isOpen: boolean;
@@ -9,7 +10,7 @@ interface CollectionsModalProps {
 }
 
 export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose }) => {
-  const { payments, timeframe, company, manager, agents } = useApp();
+  const { payments, timeframe, company, manager, agents, settings } = useApp();
   const [selectedDateIso, setSelectedDateIso] = useState<string>(getTodayIsoDate());
 
   // Default to today whenever modal opens
@@ -27,7 +28,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
   );
 
   const totalCollected = filteredPayments.reduce((acc, curr) => acc + curr.amount, 0);
-  const formattedDisplay = formatDisplayDate(selectedDateIso);
+  const formattedDisplay = formatAppDate(selectedDateIso, settings.dateFormat);
 
   // Print Handler
   const handlePrint = () => {

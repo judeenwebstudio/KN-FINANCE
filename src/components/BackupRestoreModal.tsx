@@ -37,6 +37,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
     payments,
     activityLogs,
     addActivity,
+    settings,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +73,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
         borrowers,
         payments,
         activityLogs,
+        settings,
       });
 
       // Update in-memory activity logs immediately so the event is recorded
@@ -300,7 +302,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
                         {selectedFile.name}
                       </h4>
                       <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-[#64748b] mt-1 font-medium">
-                        <span>Created: {formatActivityDateTime(selectedBackup.createdAt)}</span>
+                        <span>Created: {formatActivityDateTime(selectedBackup.createdAt, settings.dateFormat)}</span>
                         <span>•</span>
                         <span>Version: {selectedBackup.backupVersion}</span>
                       </div>

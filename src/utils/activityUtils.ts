@@ -1,26 +1,15 @@
-import type { ActivityLogEntry, ManagerAccount, AgentUser } from '../types';
+import type { ActivityLogEntry, ManagerAccount, AgentUser, AppDateFormat } from '../types';
+import { formatAppDateTime } from './dateUtils';
 
 /**
- * Formats ISO timestamp to DD/MM/YYYY, hh:mm AM/PM in user's local timezone.
+ * Formats ISO timestamp to date + time in user's local timezone according to date format preference.
  * Example: 23/09/2026, 08:18 PM
  */
-export function formatActivityDateTime(isoStr: string): string {
-  if (!isoStr) return '';
-  const d = new Date(isoStr);
-  if (isNaN(d.getTime())) return isoStr;
-
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-
-  let hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const strHours = String(hours).padStart(2, '0');
-
-  return `${day}/${month}/${year}, ${strHours}:${minutes} ${ampm}`;
+export function formatActivityDateTime(
+  isoStr: string,
+  format: AppDateFormat = 'DD/MM/YYYY'
+): string {
+  return formatAppDateTime(isoStr, format);
 }
 
 /**

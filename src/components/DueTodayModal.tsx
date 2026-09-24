@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, Image as ImageIcon, Printer, X, CheckCircle2 } from 'lucide-react';
-import { useApp, getTodayIsoDate, formatDisplayDate } from '../context/AppContext';
+import { useApp, getTodayIsoDate } from '../context/AppContext';
+import { formatAppDate } from '../utils/dateUtils';
 
 interface DueTodayModalProps {
   isOpen: boolean;
@@ -8,7 +9,7 @@ interface DueTodayModalProps {
 }
 
 export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose }) => {
-  const { timeframe, getDueBorrowersForDate, company } = useApp();
+  const { timeframe, getDueBorrowersForDate, company, settings } = useApp();
   const [selectedDateIso, setSelectedDateIso] = useState<string>(getTodayIsoDate());
 
   // Default to today whenever modal opens
@@ -23,7 +24,7 @@ export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose })
   // Retrieve dues for selected date and currently active Finance Type
   const dueItems = getDueBorrowersForDate(selectedDateIso, timeframe);
   const totalDue = dueItems.reduce((acc, curr) => acc + curr.pendingAmount, 0);
-  const formattedDisplay = formatDisplayDate(selectedDateIso);
+  const formattedDisplay = formatAppDate(selectedDateIso, settings.dateFormat);
 
   // Print Handler
   const handlePrint = () => {

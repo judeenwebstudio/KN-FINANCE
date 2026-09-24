@@ -11,7 +11,9 @@ import type {
   BorrowerFilter,
   NewBorrowerInput,
   ActivityLogEntry,
+  AppSettings,
 } from '../types';
+import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
 
 export type { NewBorrowerInput };
@@ -56,6 +58,9 @@ interface AppContextType {
   getTodayCollectedAmount: (tf: Timeframe) => number;
   getDueBorrowersForDate: (targetDateIso: string, tf: Timeframe) => DueBorrowerItem[];
   getTodayDueCount: (tf: Timeframe) => number;
+  settings: AppSettings;
+  updateSettings: (partial: Partial<AppSettings>) => void;
+  resetSettings: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -253,6 +258,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
     setActivityLogs((prev) => [newEntry, ...prev]);
+  };
+
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const saved = localStorage.getItem('kn_finance_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+        };
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_SETTINGS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kn_finance_settings', JSON.stringify(settings));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [settings]);
+
+  const updateSettings = (partial: Partial<AppSettings>) => {
+    setSettings((prev) => {
+      const updated = { ...prev, ...partial };
+      try {
+        localStorage.setItem('kn_finance_settings', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+
+    if (partial.keepLoggedIn !== undefined) {
+      setManager((prev) => (prev ? { ...prev, keepLoggedIn: partial.keepLoggedIn! } : null));
+    }
+
+    addActivity({
+      action: 'settings_updated',
+      performedByUserId: null,
+      performedByRole: 'manager',
+      message: 'Settings were updated.',
+    });
+  };
+
+  const resetSettings = () => {
+    setSettings(DEFAULT_SETTINGS);
+    try {
+      localStorage.setItem('kn_finance_settings', JSON.stringify(DEFAULT_SETTINGS));
+    } catch (e) {
+      console.error(e);
+    }
+
+    setManager((prev) => (prev ? { ...prev, keepLoggedIn: DEFAULT_SETTINGS.keepLoggedIn } : null));
+
+    addActivity({
+      action: 'settings_reset',
+      performedByUserId: null,
+      performedByRole: 'manager',
+      message: 'Settings were reset to default.',
+    });
   };
 
   const navigateTo = (newScreen: Screen) => {
@@ -685,6 +755,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getTodayCollectedAmount,
         getDueBorrowersForDate,
         getTodayDueCount,
+        settings,
+        updateSettings,
+        resetSettings,
       }}
     >
       {children}
