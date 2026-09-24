@@ -238,7 +238,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
@@ -269,7 +269,11 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     if (initialBorrower && onUpdate) {
       onUpdate(initialBorrower.id, payload);
     } else {
-      addBorrower(payload);
+      const res = await addBorrower(payload);
+      if (res && !res.success) {
+        setErrors(prev => ({ ...prev, general: res.error || 'Failed to save borrower to cloud' }));
+        return;
+      }
     }
 
     // Reset and close

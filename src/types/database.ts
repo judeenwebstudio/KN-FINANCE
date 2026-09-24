@@ -251,6 +251,36 @@ export interface DbCompanySettingsUpdate {
   updated_at?: string;
 }
 
+export interface DbCompanyCashLedger {
+  id: string;
+  company_id: string;
+  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED';
+  amount: number;
+  source_type: 'MANUAL' | 'LOAN' | 'PAYMENT';
+  borrower_id: string | null;
+  payment_id: string | null;
+  note: string | null;
+  performed_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface DbCompanyCashLedgerInsert {
+  id?: string;
+  company_id: string;
+  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED';
+  amount: number;
+  source_type?: 'MANUAL' | 'LOAN' | 'PAYMENT';
+  borrower_id?: string | null;
+  payment_id?: string | null;
+  note?: string | null;
+  performed_by_user_id?: string | null;
+  created_at?: string;
+}
+
+export interface DbCompanyCashLedgerUpdate {
+  note?: string | null;
+}
+
 /**
  * Top-level Database schema definition for Supabase client typing
  */
@@ -281,6 +311,11 @@ export interface Database {
         Row: DbPayment;
         Insert: DbPaymentInsert;
         Update: DbPaymentUpdate;
+      };
+      company_cash_ledger: {
+        Row: DbCompanyCashLedger;
+        Insert: DbCompanyCashLedgerInsert;
+        Update: DbCompanyCashLedgerUpdate;
       };
       activity_logs: {
         Row: DbActivityLog;

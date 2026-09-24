@@ -134,7 +134,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
     return `Manager (${manager?.fullName?.trim() || 'Sirajudeen'})`;
   }, [collectorSelection, agents, manager, currentRole, currentUser]);
 
-  const executeCommitPayment = () => {
+  const executeCommitPayment = async () => {
     const parsedAmount = parseFloat(paymentAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) return;
 
@@ -156,7 +156,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
       collectedBy = agentObj?.fullName || 'Agent';
     }
 
-    addPayment({
+    const res = await addPayment({
       borrowerId: borrower.id,
       borrowerName: borrower.borrowerName || borrower.name,
       amount: parsedAmount,
@@ -167,6 +167,12 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
       collectedBy,
       note: paymentNote.trim() || undefined,
     });
+
+    if (res && !res.success) {
+      setIsSubmittingPayment(false);
+      setPaymentError(res.error || 'Failed to record payment');
+      return;
+    }
 
     if (settings.paymentSoundAlert) {
       playPaymentSuccessSound();

@@ -57,9 +57,9 @@ interface AppContextType {
   toggleAgentStatus: (id: string) => void;
   setTimeframe: (tf: Timeframe) => void;
   setBorrowerFilter: (f: BorrowerFilter) => void;
-  addBorrower: (data: NewBorrowerInput) => void;
-  updateBorrower: (id: string, data: Partial<NewBorrowerInput>) => void;
-  addPayment: (data: Omit<PaymentRecord, 'id' | 'createdAt'>) => void;
+  addBorrower: (data: NewBorrowerInput) => Promise<{ success: boolean; error?: string }>;
+  updateBorrower: (id: string, data: Partial<NewBorrowerInput>) => Promise<{ success: boolean; error?: string }>;
+  addPayment: (data: Omit<PaymentRecord, 'id' | 'createdAt'>) => Promise<{ success: boolean; error?: string }>;
   addActivity: (entry: Omit<ActivityLogEntry, 'id' | 'createdAt'>) => void;
   getCashInHand: () => number;
   getTotalOutFlow: () => number;
@@ -82,15 +82,87 @@ import {
   formatDisplayDate,
   parseCustomDate,
   isPaymentDueOnDate,
+  toIsoDate,
 } from '../utils/loanCalculations';
+import { supabase } from '../lib/supabase';
 
 export {
   getTodayIsoDate,
   formatDisplayDate,
   parseCustomDate,
   isPaymentDueOnDate,
+  toIsoDate,
 };
 
+function toDbDate(val?: string | null): string | null {
+  if (!val) return null;
+  const d = parseCustomDate(val);
+  return d ? toIsoDate(d) : val;
+}
+
+function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
+  const assignedAgentObj = allAgents.find(a => a.id === row.assigned_agent_id);
+  return {
+    id: row.id,
+    name: row.name,
+    borrowerName: row.name,
+    phone: row.phone,
+    phoneNumber: row.phone,
+    alternatePhoneNumber: row.alternate_phone || '',
+    address: row.address || '',
+    financeType: row.finance_type || 'Daily',
+    agentId: row.assigned_agent_id || null,
+    assignedAgent: assignedAgentObj?.fullName || '',
+    parcelTokenMode: Boolean(row.parcel_token_mode),
+    amount: Number(row.loan_amount) || 0,
+    loanAmount: Number(row.loan_amount) || 0,
+    deductedAmount: Number(row.deducted_amount) || 0,
+    netAmountGiven: Number(row.net_amount_given) || ((Number(row.loan_amount) || 0) - (Number(row.deducted_amount) || 0)),
+    expectedReturn: Number(row.expected_return) || Number(row.loan_amount) || 0,
+    interestRate: Number(row.interest_rate) || 0,
+    repaymentDuration: row.repayment_duration || '50 Days',
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    isExistingLoan: Boolean(row.existing_loan),
+    status: row.status || 'active',
+    dateAdded: row.created_at || new Date().toISOString(),
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbPaymentToApp(row: any, allBorrowers: Borrower[], allAgents: AgentUser[], currentMgrName?: string): PaymentRecord {
+  const borrowerObj = allBorrowers.find(b => b.id === row.borrower_id);
+  const collectorAgent = allAgents.find(a => a.id === row.collected_by_user_id);
+  const isAgent = Boolean(collectorAgent);
+  return {
+    id: row.id,
+    borrowerId: row.borrower_id,
+    borrowerName: borrowerObj?.borrowerName || borrowerObj?.name || 'Borrower',
+    amount: Number(row.amount) || 0,
+    paymentDate: row.payment_date,
+    collectedByUserId: row.collected_by_user_id,
+    collectedByRole: isAgent ? 'agent' : 'manager',
+    collectedBy: isAgent ? (collectorAgent?.fullName || 'Agent') : (currentMgrName || 'Manager'),
+    financeType: row.finance_type || borrowerObj?.financeType || 'Daily',
+    note: row.note || undefined,
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbCashLedgerToApp(row: any): CashLedgerEntry {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    transactionType: row.transaction_type,
+    amount: Number(row.amount) || 0,
+    sourceType: row.source_type || 'MANUAL',
+    borrowerId: row.borrower_id || undefined,
+    paymentId: row.payment_id || undefined,
+    note: row.note || undefined,
+    performedByUserId: row.performed_by_user_id || null,
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
 
 function generateCompanyCode(): string {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -254,27 +326,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     try {
-      localStorage.setItem('kn_finance_borrowers', JSON.stringify(borrowers));
+      if (!isCloudAuth) {
+        localStorage.setItem('kn_finance_borrowers', JSON.stringify(borrowers));
+      }
     } catch (e) {
       console.error(e);
     }
-  }, [borrowers]);
+  }, [borrowers, isCloudAuth]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('kn_finance_payments', JSON.stringify(payments));
+      if (!isCloudAuth) {
+        localStorage.setItem('kn_finance_payments', JSON.stringify(payments));
+      }
     } catch (e) {
       console.error(e);
     }
-  }, [payments]);
+  }, [payments, isCloudAuth]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('kn_finance_agents', JSON.stringify(agents));
+      if (!isCloudAuth) {
+        localStorage.setItem('kn_finance_agents', JSON.stringify(agents));
+      }
     } catch (e) {
       console.error(e);
     }
-  }, [agents]);
+  }, [agents, isCloudAuth]);
 
   const [cashLedger, setCashLedger] = useState<CashLedgerEntry[]>(() => {
     try {
@@ -289,11 +367,110 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     try {
-      localStorage.setItem('kn_finance_cash_ledger', JSON.stringify(cashLedger));
+      if (!isCloudAuth) {
+        localStorage.setItem('kn_finance_cash_ledger', JSON.stringify(cashLedger));
+      }
     } catch (e) {
       console.error(e);
     }
-  }, [cashLedger]);
+  }, [cashLedger, isCloudAuth]);
+
+  // Cloud Data Synchronizer
+  const fetchCloudData = async () => {
+    if (!supabase || !currentUser) return;
+    try {
+      // 1. Fetch Agents (if manager)
+      let currentAgentList = agents;
+      if (currentUser.role === 'manager') {
+        const { data: uData, error: uErr } = await (supabase as any)
+          .from('company_users')
+          .select('*')
+          .eq('company_id', currentUser.companyId)
+          .eq('role', 'agent')
+          .order('created_at', { ascending: true });
+        if (!uErr && uData) {
+          currentAgentList = (uData as any[]).map(u => ({
+            id: u.id,
+            fullName: u.full_name,
+            mobile: u.mobile,
+            role: 'agent' as const,
+            status: u.status as 'active' | 'inactive',
+            createdAt: u.created_at,
+            pinHash: '',
+          }));
+          setAgents(currentAgentList);
+        }
+      }
+
+      // 2. Fetch Borrowers (RLS enforces company scope for manager, assigned-only for agent)
+      const { data: bData, error: bErr } = await (supabase as any)
+        .from('borrowers')
+        .select('*')
+        .eq('company_id', currentUser.companyId)
+        .order('created_at', { ascending: false });
+
+      let currentBorrowerList: Borrower[] = [];
+      if (!bErr && bData) {
+        currentBorrowerList = (bData as any[]).map(b => mapDbBorrowerToApp(b, currentAgentList));
+        setBorrowers(currentBorrowerList);
+      }
+
+      // 3. Fetch Payments (RLS enforces company scope for manager, permitted-only for agent)
+      const { data: pData, error: pErr } = await (supabase as any)
+        .from('payments')
+        .select('*')
+        .eq('company_id', currentUser.companyId)
+        .order('payment_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (!pErr && pData) {
+        const mappedPayments = (pData as any[]).map(p => mapDbPaymentToApp(p, currentBorrowerList, currentAgentList, currentUser.fullName));
+        setPayments(mappedPayments);
+      }
+
+      // 4. Fetch Cash Ledger (Manager only)
+      if (currentUser.role === 'manager') {
+        const { data: cData, error: cErr } = await (supabase as any)
+          .from('company_cash_ledger')
+          .select('*')
+          .eq('company_id', currentUser.companyId)
+          .order('created_at', { ascending: false });
+
+        if (!cErr && cData) {
+          setCashLedger((cData as any[]).map(mapDbCashLedgerToApp));
+        }
+      }
+    } catch (err) {
+      console.error('Error in fetchCloudData:', err);
+    }
+  };
+
+  // Sync cloud data on user session change and subscribe to realtime Postgres changes
+  useEffect(() => {
+    if (!currentUser || !supabase) return;
+
+    fetchCloudData();
+
+    // Subscribe to realtime database changes for instant cross-device updates
+    const channel = supabase
+      .channel(`kn_sync_${currentUser.companyId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'borrowers' }, () => {
+        fetchCloudData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => {
+        fetchCloudData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_cash_ledger' }, () => {
+        if (currentUser.role === 'manager') fetchCloudData();
+      })
+      .subscribe();
+
+    return () => {
+      if (supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [currentUser?.companyUserId]);
 
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>(() => {
     try {
@@ -636,7 +813,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const addBorrower = (data: NewBorrowerInput) => {
+  const addBorrower = async (data: NewBorrowerInput): Promise<{ success: boolean; error?: string }> => {
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        const startIso = toDbDate(data.startDate) || getTodayIsoDate();
+        const endIso = toDbDate(data.endDate);
+
+        const { error } = await (supabase as any)
+          .from('borrowers')
+          .insert({
+            company_id: currentUser.companyId,
+            name: data.borrowerName.trim(),
+            phone: data.phoneNumber.trim(),
+            alternate_phone: data.alternatePhoneNumber?.trim() || null,
+            address: data.address?.trim() || null,
+            finance_type: data.financeType,
+            assigned_agent_id: data.agentId || null,
+            loan_amount: data.loanAmount,
+            deducted_amount: data.deductedAmount,
+            net_amount_given: data.netAmountGiven,
+            expected_return: data.expectedReturn,
+            interest_rate: data.interestRate,
+            repayment_duration: data.repaymentDuration,
+            start_date: startIso,
+            end_date: endIso,
+            existing_loan: Boolean(data.isExistingLoan),
+            parcel_token_mode: Boolean(data.parcelTokenMode),
+            status: 'active',
+          });
+
+        if (error) {
+          console.error('Supabase addBorrower error:', error);
+          return { success: false, error: error.message };
+        }
+
+        await fetchCloudData();
+        return { success: true };
+      } catch (err: any) {
+        console.error('addBorrower exception:', err);
+        return { success: false, error: err.message || 'Failed to create borrower in cloud.' };
+      }
+    }
+
+    // Local / Offline fallback
     const now = new Date().toISOString();
     const newBorrower: Borrower = {
       id: Date.now().toString(),
@@ -651,8 +870,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBorrowers(prev => [newBorrower, ...prev]);
 
-    // Automatic Cash Outflow on Loan Disbursement:
-    // Net amount actually handed over to the borrower
     const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0));
     if (netDisbursed > 0) {
       const ledgerEntry: CashLedgerEntry = {
@@ -683,9 +900,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       borrowerId: newBorrower.id,
       message: `Borrower ${data.borrowerName.trim()} was added.`,
     });
+
+    return { success: true };
   };
 
-  const updateBorrower = (id: string, data: Partial<NewBorrowerInput>) => {
+  const updateBorrower = async (id: string, data: Partial<NewBorrowerInput>): Promise<{ success: boolean; error?: string }> => {
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        const updatePayload: any = {};
+        if (data.borrowerName !== undefined) updatePayload.name = data.borrowerName.trim();
+        if (data.phoneNumber !== undefined) updatePayload.phone = data.phoneNumber.trim();
+        if (data.alternatePhoneNumber !== undefined) updatePayload.alternate_phone = data.alternatePhoneNumber.trim() || null;
+        if (data.address !== undefined) updatePayload.address = data.address.trim() || null;
+        if (data.financeType !== undefined) updatePayload.finance_type = data.financeType;
+        if (data.agentId !== undefined) updatePayload.assigned_agent_id = data.agentId || null;
+        if (data.loanAmount !== undefined) updatePayload.loan_amount = data.loanAmount;
+        if (data.deductedAmount !== undefined) updatePayload.deducted_amount = data.deductedAmount;
+        if (data.netAmountGiven !== undefined) updatePayload.net_amount_given = data.netAmountGiven;
+        if (data.expectedReturn !== undefined) updatePayload.expected_return = data.expectedReturn;
+        if (data.interestRate !== undefined) updatePayload.interest_rate = data.interestRate;
+        if (data.repaymentDuration !== undefined) updatePayload.repayment_duration = data.repaymentDuration;
+        if (data.startDate !== undefined) updatePayload.start_date = toDbDate(data.startDate);
+        if (data.endDate !== undefined) updatePayload.end_date = toDbDate(data.endDate);
+        if (data.isExistingLoan !== undefined) updatePayload.existing_loan = data.isExistingLoan;
+        if (data.parcelTokenMode !== undefined) updatePayload.parcel_token_mode = data.parcelTokenMode;
+
+        const { error } = await (supabase as any)
+          .from('borrowers')
+          .update(updatePayload)
+          .eq('id', id)
+          .eq('company_id', currentUser.companyId);
+
+        if (error) {
+          console.error('Supabase updateBorrower error:', error);
+          return { success: false, error: error.message };
+        }
+
+        await fetchCloudData();
+        return { success: true };
+      } catch (err: any) {
+        console.error('updateBorrower exception:', err);
+        return { success: false, error: err.message || 'Failed to update borrower.' };
+      }
+    }
+
+    // Local / Offline fallback
     const target = borrowers.find(b => b.id === id);
     const updatedName = data.borrowerName !== undefined ? data.borrowerName.trim() : (target?.borrowerName || target?.name || 'Borrower');
 
@@ -713,9 +972,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       borrowerId: id,
       message: `Borrower ${updatedName} details were updated.`,
     });
+
+    return { success: true };
   };
 
-  const addPayment = (data: Omit<PaymentRecord, 'id' | 'createdAt'>) => {
+  const addPayment = async (data: Omit<PaymentRecord, 'id' | 'createdAt'>): Promise<{ success: boolean; error?: string }> => {
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        const paymentDateIso = toDbDate(data.paymentDate) || getTodayIsoDate();
+        const { error } = await (supabase as any)
+          .from('payments')
+          .insert({
+            company_id: currentUser.companyId,
+            borrower_id: data.borrowerId,
+            collected_by_user_id: currentUser.companyUserId,
+            amount: data.amount,
+            payment_date: paymentDateIso,
+            finance_type: data.financeType,
+            note: data.note?.trim() || null,
+          });
+
+        if (error) {
+          console.error('Supabase addPayment error:', error);
+          return { success: false, error: error.message };
+        }
+
+        await fetchCloudData();
+        return { success: true };
+      } catch (err: any) {
+        console.error('addPayment exception:', err);
+        return { success: false, error: err.message || 'Failed to record payment.' };
+      }
+    }
+
+    // Local / Offline fallback
     const paymentId = Date.now().toString();
     const now = new Date().toISOString();
     const newPayment: PaymentRecord = {
@@ -729,7 +1019,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setPayments(prev => [newPayment, ...prev]);
 
-    // Automatic Collection Inflow on Payment Receipt:
     if (data.amount > 0) {
       const ledgerEntry: CashLedgerEntry = {
         id: `cash_pay_${paymentId}`,
@@ -753,7 +1042,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // 1. Record payment_collected activity
     addActivity({
       action: 'payment_collected',
       performedByUserId: newPayment.collectedByUserId ?? null,
@@ -764,7 +1052,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       message: `₹${data.amount.toLocaleString('en-IN')} collected from ${data.borrowerName}.`,
     });
 
-    // 2. If loan is fully paid (totalPaid >= expectedReturn), mark as closed and record ONE loan_closed activity
     setBorrowers(prev =>
       prev.map(b => {
         if (b.id !== data.borrowerId) return b;
@@ -787,6 +1074,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return b;
       })
     );
+
+    return { success: true };
   };
 
   const getBorrowerPaidAmount = (borrowerId: string): number => {
@@ -872,8 +1161,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .reduce((sum, e) => sum + e.amount, 0);
   };
 
-  const addManualCash = (amount: number, note?: string) => {
+  const addManualCash = async (amount: number, note?: string) => {
     if (amount <= 0) return;
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        await (supabase as any)
+          .from('company_cash_ledger')
+          .insert({
+            company_id: currentUser.companyId,
+            transaction_type: 'CASH_ADDED',
+            amount: amount,
+            source_type: 'MANUAL',
+            note: note?.trim() || 'Cash added to hand',
+            performed_by_user_id: currentUser.companyUserId,
+          });
+        await fetchCloudData();
+      } catch (e) {
+        console.error('Failed to insert cash addition to cloud ledger:', e);
+      }
+      return;
+    }
+
     const now = new Date().toISOString();
     const isFirstEntry = cashLedger.length === 0;
     const newEntry: CashLedgerEntry = {
@@ -890,8 +1198,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCashLedger(prev => [newEntry, ...prev]);
   };
 
-  const decreaseManualCash = (amount: number, note?: string) => {
+  const decreaseManualCash = async (amount: number, note?: string) => {
     if (amount <= 0) return;
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        await (supabase as any)
+          .from('company_cash_ledger')
+          .insert({
+            company_id: currentUser.companyId,
+            transaction_type: 'CASH_DECREASED',
+            amount: amount,
+            source_type: 'MANUAL',
+            note: note?.trim() || 'Cash withdrawn / decreased',
+            performed_by_user_id: currentUser.companyUserId,
+          });
+        await fetchCloudData();
+      } catch (e) {
+        console.error('Failed to insert cash decrease to cloud ledger:', e);
+      }
+      return;
+    }
+
     const now = new Date().toISOString();
     const newEntry: CashLedgerEntry = {
       id: `cash_dec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
