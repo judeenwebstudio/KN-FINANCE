@@ -17,16 +17,23 @@ function getClientIp(req: VercelRequest): string {
   return 'unknown';
 }
 
+function cleanSecret(s: string): string {
+  return String(s || '').trim().replace(/^["']|["']$/g, '');
+}
+
 /**
  * Constant-time comparison between provided and expected bootstrap secrets.
  * Uses SHA-256 digest to ensure identical buffer length and prevent timing attacks.
+ * Automatically handles whitespace/newline trimming and surrounding quotes.
  */
 function verifyBootstrapSecret(provided: string, expected: string): boolean {
-  if (typeof provided !== 'string' || !provided || typeof expected !== 'string' || !expected) {
+  const pClean = cleanSecret(provided);
+  const eClean = cleanSecret(expected);
+  if (!pClean || !eClean) {
     return false;
   }
-  const pHash = crypto.createHash('sha256').update(provided).digest();
-  const eHash = crypto.createHash('sha256').update(expected).digest();
+  const pHash = crypto.createHash('sha256').update(pClean).digest();
+  const eHash = crypto.createHash('sha256').update(eClean).digest();
   return crypto.timingSafeEqual(pHash, eHash);
 }
 
@@ -38,21 +45,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // 1. Mandatory Server-Side Bootstrap Configuration Check (Fail-closed)
     const requiredBootstrapSecret = process.env.MANAGER_BOOTSTRAP_SECRET || '';
-    if (!requiredBootstrapSecret) {
+    if (!cleanSecret(requiredBootstrapSecret)) {
       console.error('[auth/replace-manager] Service disabled: MANAGER_BOOTSTRAP_SECRET is not configured on this server.');
       return res.status(503).json({ error: 'Manager replacement service is not configured on this server.' });
     }
 
-    // 2. Extract and Authorize Secret (Timing-safe comparison)
+    // 2. Extract and Authorize Secret (Timing-safe comparison with clean normalization)
     const providedSecret = String(
       req.body?.bootstrapSecret ||
       req.headers['x-bootstrap-secret'] ||
       (req.headers.authorization ? req.headers.authorization.replace(/^Bearer\s+/i, '') : '') ||
       ''
-    ).trim();
+    );
 
-    if (!providedSecret || !verifyBootstrapSecret(providedSecret, requiredBootstrapSecret)) {
-      return res.status(403).json({ error: 'Unauthorized: Invalid or missing replacement authorization secret.' });
+    if (!verifyBootstrapSecret(providedSecret, requiredBootstrapSecret)) {
+      const pLen = cleanSecret(providedSecret).length;
+      const eLen = cleanSecret(requiredBootstrapSecret).length;
+      console.error(`[auth/replace-manager] Secret check mismatch. Server secret length: ${eLen}, Provided secret length: ${pLen}`);
+      return res.status(403).json({
+        error: 'Unauthorized: Invalid or missing replacement authorization secret.',
+        debug: {
+          serverSecretConfigured: eLen > 0,
+          providedSecretReceived: pLen > 0,
+          serverSecretLength: eLen,
+          providedSecretLength: pLen,
+          lengthMatched: pLen === eLen,
+        }
+      });
     }
 
     const {
