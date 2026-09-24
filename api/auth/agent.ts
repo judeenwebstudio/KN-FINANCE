@@ -33,40 +33,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Invalid or expired manager session.' });
     }
 
-    // Authenticated client with user JWT to read company profile under RLS
-    const userClient = createClient(supabaseUrl, anonKey || serviceRoleKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
+    // Authoritatively resolve Manager identity from cryptographically verified user metadata & database
+    const meta = userData.user.user_metadata || {};
+    let managerId = meta.company_user_id || '';
+    let companyId = meta.company_id || '';
+    let role = meta.role || '';
 
-    let managerProfile: { id: string; company_id: string; role: string; status: string } | null = null;
-
-    const { data: userClientProfile } = await userClient
-      .from('company_users')
-      .select('id, company_id, role, status')
-      .eq('auth_user_id', userData.user.id)
-      .eq('status', 'active')
-      .maybeSingle();
-
-    if (userClientProfile) {
-      managerProfile = userClientProfile;
-    } else {
-      const { data: adminProfile, error: adminErr } = await supabaseAdmin
+    if (!managerId || !companyId || role !== 'manager') {
+      const { data: dbProfile } = await supabaseAdmin
         .from('company_users')
         .select('id, company_id, role, status')
         .eq('auth_user_id', userData.user.id)
         .eq('status', 'active')
         .maybeSingle();
-      if (adminProfile) {
-        managerProfile = adminProfile;
-      } else if (adminErr) {
-        console.error('[auth/agent] Manager profile query error:', adminErr.message);
+
+      if (dbProfile) {
+        managerId = dbProfile.id;
+        companyId = dbProfile.company_id;
+        role = dbProfile.role;
       }
     }
 
-    if (!managerProfile || managerProfile.role !== 'manager') {
+    if (!managerId || !companyId || role !== 'manager') {
       return res.status(403).json({ error: 'Forbidden: Only active company Managers can perform this operation.' });
     }
+
+    const managerProfile = {
+      id: managerId,
+      company_id: companyId,
+      role,
+      status: 'active'
+    };
 
     // 2. Handle POST: Create Agent
     if (req.method === 'POST') {
