@@ -26,32 +26,13 @@ export const WelcomeScreen: React.FC = () => {
         </h1>
 
         {/* Action Buttons */}
-        <div className="w-full max-w-xs sm:max-w-sm space-y-3.5">
-          <button
-            onClick={() => navigateTo('register')}
-            className="w-full h-12 rounded-xl bg-[#4f46e5] text-white font-medium text-base shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center"
-          >
-            Create Account
-          </button>
-
+        <div className="w-full max-w-xs sm:max-w-sm">
           <button
             onClick={() => navigateTo('login')}
-            className="w-full h-12 rounded-xl border border-[#4f46e5] text-[#4f46e5] bg-white font-medium text-base hover:bg-indigo-50/50 active:scale-[0.99] transition-all flex items-center justify-center"
+            className="w-full h-12 rounded-xl bg-[#4f46e5] text-white font-medium text-base shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center"
           >
             Login
           </button>
-        </div>
-
-        {/* WhatsApp support link */}
-        <div className="mt-8 text-center">
-          <a
-            href="https://wa.me/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs sm:text-sm text-[#64748b] hover:text-[#4f46e5] transition-colors"
-          >
-            Any problem? Contact us on <span className="font-semibold text-[#25D366]">WhatsApp</span>
-          </a>
         </div>
       </div>
 

@@ -324,16 +324,6 @@ export const LoginScreen: React.FC = () => {
           <div className="mt-4 text-center">
             <button
               type="button"
-              onClick={() => navigateTo('register')}
-              className="text-xs sm:text-sm font-semibold text-[#4f46e5] hover:underline"
-            >
-              Don't have an account? Create Account
-            </button>
-          </div>
-
-          <div className="mt-2 text-center">
-            <button
-              type="button"
               onClick={() => navigateTo('welcome')}
               className="text-xs text-[#64748b] hover:text-[#1e293b]"
             >
