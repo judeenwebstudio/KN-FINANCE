@@ -490,6 +490,13 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                 </div>
 
                 <div>
+                  <span className="text-slate-400 block text-[11px] font-medium">Collection Method</span>
+                  <span className="font-semibold text-[#1e293b]">
+                    {borrower.collectionMethod || '—'}
+                  </span>
+                </div>
+
+                <div>
                   <span className="text-slate-400 block text-[11px] font-medium">Loan Amount</span>
                   <span className="font-semibold text-[#1e293b]">
                     ₹{(borrower.loanAmount || borrower.amount || 0).toLocaleString('en-IN')}

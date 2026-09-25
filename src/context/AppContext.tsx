@@ -124,6 +124,7 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
     weeklyCollectionDay: row.weekly_collection_day !== null && row.weekly_collection_day !== undefined ? Number(row.weekly_collection_day) : undefined,
     monthlyCollectionDay: row.monthly_collection_day !== null && row.monthly_collection_day !== undefined ? Number(row.monthly_collection_day) : undefined,
     collectionLine: row.collection_line || null,
+    collectionMethod: row.collection_method || null,
     agentId: row.assigned_agent_id || null,
     assignedAgent: assignedAgentObj?.fullName || '',
     agentCommission: agentComm,
@@ -856,6 +857,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             weekly_collection_day: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
             monthly_collection_day: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
             collection_line: data.collectionLine ? data.collectionLine.trim() : null,
+            collection_method: data.collectionMethod ? data.collectionMethod.trim() : null,
             assigned_agent_id: data.agentId || null,
             loan_amount: data.loanAmount,
             deducted_amount: data.deductedAmount,
@@ -895,6 +897,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       weeklyCollectionDay: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
       monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
       collectionLine: data.collectionLine ? data.collectionLine.trim() : null,
+      collectionMethod: data.collectionMethod ? data.collectionMethod.trim() : null,
       agentId: data.agentId !== undefined ? data.agentId : null,
       agentCommission: Number(data.agentCommission) || 0,
       name: data.borrowerName,
@@ -957,6 +960,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         if (data.collectionLine !== undefined) {
           updatePayload.collection_line = data.collectionLine ? data.collectionLine.trim() : null;
+        }
+        if (data.collectionMethod !== undefined) {
+          updatePayload.collection_method = data.collectionMethod ? data.collectionMethod.trim() : null;
         }
         if (data.agentId !== undefined) updatePayload.assigned_agent_id = data.agentId || null;
         if (data.agentCommission !== undefined) updatePayload.agent_commission = data.agentCommission;

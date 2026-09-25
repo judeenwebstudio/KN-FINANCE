@@ -4,8 +4,8 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
 import { calculateBorrowerEndDate } from '../utils/loanCalculations';
-import { COLLECTION_LINES } from '../types';
-import type { Timeframe, Borrower, NewBorrowerInput, CollectionLine } from '../types';
+import { COLLECTION_LINES, COLLECTION_METHODS } from '../types';
+import type { Timeframe, Borrower, NewBorrowerInput, CollectionLine, CollectionMethod } from '../types';
 
 interface AddBorrowerModalProps {
   isOpen: boolean;
@@ -51,6 +51,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [weeklyCollectionDay, setWeeklyCollectionDay] = useState<number>(1); // 1 = Monday ... 7 = Sunday
   const [monthlyCollectionDay, setMonthlyCollectionDay] = useState<number>(1); // 1 .. 31
   const [collectionLine, setCollectionLine] = useState<CollectionLine>('Karumandapam');
+  const [collectionMethod, setCollectionMethod] = useState<CollectionMethod>('Hand Cash');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [agentCommission, setAgentCommission] = useState('0');
   const [parcelTokenMode, setParcelTokenMode] = useState(false);
@@ -91,6 +92,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || 1);
         setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || 1);
         setCollectionLine((initialBorrower.collectionLine as CollectionLine) || 'Karumandapam');
+        setCollectionMethod((initialBorrower.collectionMethod as CollectionMethod) || 'Hand Cash');
         setSelectedAgentId(initialBorrower.agentId || '');
         setAgentCommission(
           initialBorrower.agentCommission !== undefined
@@ -113,6 +115,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setWeeklyCollectionDay(1);
         setMonthlyCollectionDay(1);
         setCollectionLine('Karumandapam');
+        setCollectionMethod('Hand Cash');
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
         setStartDateIso(getTodayIsoDate());
@@ -271,6 +274,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       newErrors.collectionLine = 'Please select a valid Line';
     }
 
+    if (!collectionMethod || !COLLECTION_METHODS.includes(collectionMethod)) {
+      newErrors.collectionMethod = 'Please select a valid Collection Method';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -337,6 +344,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       weeklyCollectionDay: financeType === 'Weekly' ? weeklyCollectionDay : null,
       monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
       collectionLine: collectionLine ? collectionLine.trim() : 'Karumandapam',
+      collectionMethod: collectionMethod ? collectionMethod.trim() : 'Hand Cash',
       agentId: selectedAgentId ? selectedAgentId : null,
       agentCommission: commissionVal,
       parcelTokenMode,
@@ -642,6 +650,27 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 </select>
                 {errors.collectionLine && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.collectionLine}</p>
+                )}
+              </div>
+
+              {/* Collection Method Dropdown */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Collection Method <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={collectionMethod}
+                  onChange={(e) => setCollectionMethod(e.target.value as CollectionMethod)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                >
+                  {COLLECTION_METHODS.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+                {errors.collectionMethod && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.collectionMethod}</p>
                 )}
               </div>
 

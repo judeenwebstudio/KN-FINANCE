@@ -105,6 +105,7 @@ export interface DbBorrower {
   weekly_collection_day?: number | null;
   monthly_collection_day?: number | null;
   collection_line?: string | null;
+  collection_method?: string | null;
   loan_amount: number;
   deducted_amount: number;
   agent_commission: number;
@@ -133,6 +134,7 @@ export interface DbBorrowerInsert {
   weekly_collection_day?: number | null;
   monthly_collection_day?: number | null;
   collection_line?: string | null;
+  collection_method?: string | null;
   loan_amount: number;
   deducted_amount?: number;
   agent_commission?: number;
@@ -159,6 +161,7 @@ export interface DbBorrowerUpdate {
   weekly_collection_day?: number | null;
   monthly_collection_day?: number | null;
   collection_line?: string | null;
+  collection_method?: string | null;
   loan_amount?: number;
   deducted_amount?: number;
   agent_commission?: number;
