@@ -38,24 +38,7 @@ export const SuccessScreen: React.FC = () => {
           >
             Continue to Login
           </button>
-
-          {/* WhatsApp Support Link */}
-          <div className="text-center">
-            <a
-              href="https://wa.me/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs sm:text-sm text-[#64748b] hover:text-[#4f46e5] transition-colors"
-            >
-              Any problem? Contact us on <span className="font-semibold text-[#25D366]">WhatsApp</span>
-            </a>
-          </div>
         </div>
-      </div>
-
-      {/* Bottom Version */}
-      <div className="text-center text-xs text-[#94a3b8] font-medium pt-4 pb-2">
-        v1.8
       </div>
     </div>
   );
