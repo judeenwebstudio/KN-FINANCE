@@ -22,6 +22,7 @@ import type { BorrowerDocument } from '../types';
 import {
   getBorrowerLoanSummary,
   getTodayIsoDate,
+  formatCollectionSchedule,
 } from '../utils/loanCalculations';
 import { resolveCollectorName } from '../utils/agentUtils';
 import { formatAppDate } from '../utils/dateUtils';
@@ -527,6 +528,13 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                   <span className="text-slate-400 block text-[11px] font-medium">Repayment Duration</span>
                   <span className="font-semibold text-[#1e293b]">
                     {borrower.repaymentDuration || '—'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-slate-400 block text-[11px] font-medium">Collection Schedule</span>
+                  <span className="font-semibold text-[#1e293b]">
+                    {formatCollectionSchedule(borrower)}
                   </span>
                 </div>
 

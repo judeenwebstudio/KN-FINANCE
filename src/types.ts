@@ -57,6 +57,8 @@ export interface Borrower {
   alternatePhoneNumber?: string;
   address?: string;
   financeType: 'Daily' | 'Weekly' | 'Monthly';
+  weeklyCollectionDay?: number | null; // 1=Monday ... 7=Sunday (for Weekly)
+  monthlyCollectionDay?: number | null; // 1..31 (for Monthly)
   agentId?: string | null;
   assignedAgent?: string;
   agentCommission?: number;
@@ -82,6 +84,8 @@ export type NewBorrowerInput = {
   alternatePhoneNumber?: string;
   address?: string;
   financeType: 'Daily' | 'Weekly' | 'Monthly';
+  weeklyCollectionDay?: number | null; // 1=Monday ... 7=Sunday (for Weekly)
+  monthlyCollectionDay?: number | null; // 1..31 (for Monthly)
   agentId?: string | null;
   assignedAgent?: string;
   agentCommission?: number;

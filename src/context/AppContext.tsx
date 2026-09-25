@@ -121,6 +121,8 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
     alternatePhoneNumber: row.alternate_phone || '',
     address: row.address || '',
     financeType: row.finance_type || 'Daily',
+    weeklyCollectionDay: row.weekly_collection_day !== null && row.weekly_collection_day !== undefined ? Number(row.weekly_collection_day) : undefined,
+    monthlyCollectionDay: row.monthly_collection_day !== null && row.monthly_collection_day !== undefined ? Number(row.monthly_collection_day) : undefined,
     agentId: row.assigned_agent_id || null,
     assignedAgent: assignedAgentObj?.fullName || '',
     agentCommission: agentComm,
@@ -850,6 +852,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             alternate_phone: data.alternatePhoneNumber?.trim() || null,
             address: data.address?.trim() || null,
             finance_type: data.financeType,
+            weekly_collection_day: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
+            monthly_collection_day: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
             assigned_agent_id: data.agentId || null,
             loan_amount: data.loanAmount,
             deducted_amount: data.deductedAmount,
@@ -886,6 +890,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newBorrower: Borrower = {
       id: Date.now().toString(),
       ...data,
+      weeklyCollectionDay: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
+      monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
       agentId: data.agentId !== undefined ? data.agentId : null,
       agentCommission: Number(data.agentCommission) || 0,
       name: data.borrowerName,
@@ -940,6 +946,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.alternatePhoneNumber !== undefined) updatePayload.alternate_phone = data.alternatePhoneNumber.trim() || null;
         if (data.address !== undefined) updatePayload.address = data.address.trim() || null;
         if (data.financeType !== undefined) updatePayload.finance_type = data.financeType;
+        if (data.weeklyCollectionDay !== undefined) {
+          updatePayload.weekly_collection_day = data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null;
+        }
+        if (data.monthlyCollectionDay !== undefined) {
+          updatePayload.monthly_collection_day = data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null;
+        }
         if (data.agentId !== undefined) updatePayload.assigned_agent_id = data.agentId || null;
         if (data.agentCommission !== undefined) updatePayload.agent_commission = data.agentCommission;
         if (data.loanAmount !== undefined) updatePayload.loan_amount = data.loanAmount;

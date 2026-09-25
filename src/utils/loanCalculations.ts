@@ -80,8 +80,58 @@ export interface AllocatedInstallment extends ScheduledInstallment {
   isOnTime: boolean;        // fully paid on or before dueDateIso
 }
 
+export const WEEKDAY_NAMES: Record<number, string> = {
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+  7: 'Sunday',
+};
+
+export function formatOrdinalDay(day: number): string {
+  const j = day % 10;
+  const k = day % 100;
+  if (j === 1 && k !== 11) return `${day}st`;
+  if (j === 2 && k !== 12) return `${day}nd`;
+  if (j === 3 && k !== 13) return `${day}rd`;
+  return `${day}th`;
+}
+
+export function formatCollectionSchedule(borrower: Partial<Borrower>): string {
+  const type = borrower.financeType || 'Daily';
+  if (type === 'Daily') {
+    return 'Daily';
+  }
+  if (type === 'Weekly') {
+    if (borrower.weeklyCollectionDay && WEEKDAY_NAMES[borrower.weeklyCollectionDay]) {
+      return `Every ${WEEKDAY_NAMES[borrower.weeklyCollectionDay]}`;
+    }
+    const startDate = parseCustomDate(borrower.startDate);
+    if (startDate) {
+      const jsDay = startDate.getDay();
+      const day1to7 = jsDay === 0 ? 7 : jsDay;
+      return `Every ${WEEKDAY_NAMES[day1to7] || 'Week'}`;
+    }
+    return 'Weekly';
+  }
+  if (type === 'Monthly') {
+    if (borrower.monthlyCollectionDay) {
+      return `${formatOrdinalDay(borrower.monthlyCollectionDay)} of every month`;
+    }
+    const startDate = parseCustomDate(borrower.startDate);
+    if (startDate) {
+      return `${formatOrdinalDay(startDate.getDate())} of every month`;
+    }
+    return 'Monthly';
+  }
+  return type;
+}
+
 /**
- * Generates all scheduled installments for a borrower from startDate to duration.
+ * Generates all scheduled installments for a borrower from startDate to duration,
+ * according to the Finance Type and explicit collection schedule.
  */
 export function getBorrowerSchedule(borrower: Borrower): ScheduledInstallment[] {
   const startDate = parseCustomDate(borrower.startDate);
@@ -95,25 +145,99 @@ export function getBorrowerSchedule(borrower: Borrower): ScheduledInstallment[] 
   const installments: ScheduledInstallment[] = [];
   const type = borrower.financeType || 'Daily';
 
-  for (let i = 0; i < durationCount; i++) {
-    const dueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-
-    if (type === 'Daily') {
-      dueDate.setDate(dueDate.getDate() + i);
-    } else if (type === 'Weekly') {
-      dueDate.setDate(dueDate.getDate() + i * 7);
-    } else if (type === 'Monthly') {
-      dueDate.setMonth(dueDate.getMonth() + i);
+  if (type === 'Daily') {
+    for (let i = 0; i < durationCount; i++) {
+      const dueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+      installments.push({
+        installmentIndex: i + 1,
+        dueDateIso: toIsoDate(dueDate),
+        scheduledAmount: installmentAmount,
+      });
+    }
+  } else if (type === 'Weekly') {
+    // 1=Monday ... 7=Sunday
+    let firstDueDate: Date;
+    if (borrower.weeklyCollectionDay && borrower.weeklyCollectionDay >= 1 && borrower.weeklyCollectionDay <= 7) {
+      const jsDay = startDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      const currentDay1to7 = jsDay === 0 ? 7 : jsDay;
+      const daysToAdd = (borrower.weeklyCollectionDay - currentDay1to7 + 7) % 7;
+      firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + daysToAdd);
+    } else {
+      // Legacy fallback: startDate is first installment
+      firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
     }
 
-    installments.push({
-      installmentIndex: i + 1,
-      dueDateIso: toIsoDate(dueDate),
-      scheduledAmount: installmentAmount,
-    });
+    for (let i = 0; i < durationCount; i++) {
+      const dueDate = new Date(firstDueDate.getFullYear(), firstDueDate.getMonth(), firstDueDate.getDate() + i * 7);
+      installments.push({
+        installmentIndex: i + 1,
+        dueDateIso: toIsoDate(dueDate),
+        scheduledAmount: installmentAmount,
+      });
+    }
+  } else if (type === 'Monthly') {
+    // 1..31 with month-end capping
+    const targetDay = borrower.monthlyCollectionDay && borrower.monthlyCollectionDay >= 1 && borrower.monthlyCollectionDay <= 31
+      ? borrower.monthlyCollectionDay
+      : startDate.getDate();
+
+    const startYear = startDate.getFullYear();
+    let startMonthIndex = startDate.getMonth();
+
+    if (borrower.monthlyCollectionDay) {
+      if (startDate.getDate() > targetDay) {
+        startMonthIndex += 1;
+      }
+    }
+
+    for (let i = 0; i < durationCount; i++) {
+      const targetMonthIndex = startMonthIndex + i;
+      const tempDate = new Date(startYear, targetMonthIndex, 1);
+      const year = tempDate.getFullYear();
+      const monthIndex = tempDate.getMonth();
+
+      // Month-end rule: Last valid calendar day of that month
+      const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const validDay = Math.min(targetDay, lastDayOfMonth);
+      const dueDate = new Date(year, monthIndex, validDay);
+
+      installments.push({
+        installmentIndex: i + 1,
+        dueDateIso: toIsoDate(dueDate),
+        scheduledAmount: installmentAmount,
+      });
+    }
   }
 
   return installments;
+}
+
+/**
+ * Calculates end date in DD/MM/YYYY matching the canonical schedule calculation.
+ */
+export function calculateBorrowerEndDate(
+  startDateIso: string,
+  financeType: Timeframe,
+  durationStr: string,
+  weeklyCollectionDay?: number | null,
+  monthlyCollectionDay?: number | null
+): string {
+  if (!startDateIso || !durationStr) return '';
+  const mockBorrower = {
+    startDate: startDateIso,
+    financeType,
+    repaymentDuration: durationStr,
+    weeklyCollectionDay,
+    monthlyCollectionDay,
+    loanAmount: 1000,
+    expectedReturn: 1000,
+  } as Borrower;
+
+  const schedule = getBorrowerSchedule(mockBorrower);
+  if (schedule.length === 0) return '';
+  const lastInstallment = schedule[schedule.length - 1];
+  const [y, m, d] = lastInstallment.dueDateIso.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 /**

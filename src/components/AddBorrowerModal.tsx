@@ -3,6 +3,7 @@ import { X, Phone, Upload, Trash2, Plus, AlertCircle, FileText, Image as ImageIc
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
+import { calculateBorrowerEndDate } from '../utils/loanCalculations';
 import type { Timeframe, Borrower, NewBorrowerInput } from '../types';
 
 interface AddBorrowerModalProps {
@@ -19,14 +20,6 @@ const DURATION_OPTIONS: Record<Timeframe, string[]> = {
   Monthly: ['3 Months', '6 Months', '9 Months', '12 Months', '24 Months'],
 };
 
-// Helper to format Date object into DD/MM/YYYY
-function formatDateDDMMYYYY(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
 // Helper to get today in YYYY-MM-DD for <input type="date">
 function getTodayIsoDate(): string {
   const today = new Date();
@@ -34,38 +27,6 @@ function getTodayIsoDate(): string {
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-// Calculate end date based on Start Date (YYYY-MM-DD), Finance Type, and Repayment Duration
-function calculateEndDate(startDateIso: string, financeType: Timeframe, durationStr: string): string {
-  if (!startDateIso || !durationStr) return '';
-
-  const [yearStr, monthStr, dayStr] = startDateIso.split('-');
-  const year = parseInt(yearStr, 10);
-  const monthIndex = parseInt(monthStr, 10) - 1;
-  const day = parseInt(dayStr, 10);
-
-  if (isNaN(year) || isNaN(monthIndex) || isNaN(day)) return '';
-
-  const date = new Date(year, monthIndex, day);
-  const numMatch = durationStr.match(/\d+/);
-  const count = numMatch ? parseInt(numMatch[0], 10) : 0;
-
-  if (count <= 0) return '';
-
-  if (financeType === 'Daily') {
-    // Inclusive: Start Date + (Duration - 1 days)
-    date.setDate(date.getDate() + (count - 1));
-  } else if (financeType === 'Weekly') {
-    // Inclusive: Start Date + (count * 7 - 1 days)
-    date.setDate(date.getDate() + (count * 7 - 1));
-  } else if (financeType === 'Monthly') {
-    // Start Date + count months - 1 day
-    date.setMonth(date.getMonth() + count);
-    date.setDate(date.getDate() - 1);
-  }
-
-  return formatDateDDMMYYYY(date);
 }
 
 export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
@@ -86,6 +47,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [alternatePhoneNumber, setAlternatePhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [financeType, setFinanceType] = useState<Timeframe>(defaultType);
+  const [weeklyCollectionDay, setWeeklyCollectionDay] = useState<number>(1); // 1 = Monday ... 7 = Sunday
+  const [monthlyCollectionDay, setMonthlyCollectionDay] = useState<number>(1); // 1 .. 31
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [agentCommission, setAgentCommission] = useState('0');
   const [parcelTokenMode, setParcelTokenMode] = useState(false);
@@ -123,6 +86,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setAlternatePhoneNumber(initialBorrower.alternatePhoneNumber || '');
         setAddress(initialBorrower.address || '');
         setFinanceType(initialBorrower.financeType || 'Daily');
+        setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || 1);
+        setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || 1);
         setSelectedAgentId(initialBorrower.agentId || '');
         setAgentCommission(
           initialBorrower.agentCommission !== undefined
@@ -142,6 +107,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setAlternatePhoneNumber('');
         setAddress('');
         setFinanceType(initialType);
+        setWeeklyCollectionDay(1);
+        setMonthlyCollectionDay(1);
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
         setStartDateIso(getTodayIsoDate());
@@ -209,8 +176,14 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
   // End Date calculation
   const calculatedEndDate = useMemo(() => {
-    return calculateEndDate(startDateIso, financeType, repaymentDuration);
-  }, [startDateIso, financeType, repaymentDuration]);
+    return calculateBorrowerEndDate(
+      startDateIso,
+      financeType,
+      repaymentDuration,
+      financeType === 'Weekly' ? weeklyCollectionDay : null,
+      financeType === 'Monthly' ? monthlyCollectionDay : null
+    );
+  }, [startDateIso, financeType, repaymentDuration, weeklyCollectionDay, monthlyCollectionDay]);
 
   // Formatted start date for display
   const formattedStartDate = useMemo(() => {
@@ -278,6 +251,18 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       newErrors.startDate = 'Start Date is required';
     }
 
+    if (financeType === 'Weekly') {
+      if (!weeklyCollectionDay || weeklyCollectionDay < 1 || weeklyCollectionDay > 7) {
+        newErrors.weeklyCollectionDay = 'Collection Day is required';
+      }
+    }
+
+    if (financeType === 'Monthly') {
+      if (!monthlyCollectionDay || monthlyCollectionDay < 1 || monthlyCollectionDay > 31) {
+        newErrors.monthlyCollectionDay = 'Collection Date is required';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -341,6 +326,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       alternatePhoneNumber: alternatePhoneNumber.trim() || undefined,
       address: address.trim() || undefined,
       financeType,
+      weeklyCollectionDay: financeType === 'Weekly' ? weeklyCollectionDay : null,
+      monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
       agentId: selectedAgentId ? selectedAgentId : null,
       agentCommission: commissionVal,
       parcelTokenMode,
@@ -527,7 +514,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               Loan Configuration
             </h3>
 
-            {/* Finance Type, Assign to Agent, Agent Commission, Parcel Token Mode */}
+            {/* Finance Type, Dynamic Schedule, Assign to Agent, Agent Commission, Parcel Token Mode */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
               {/* Finance Type */}
               <div>
@@ -544,6 +531,54 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                   <option value="Monthly">Monthly</option>
                 </select>
               </div>
+
+              {/* Dynamic Collection Day (Weekly) */}
+              {financeType === 'Weekly' && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Collection Day <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={weeklyCollectionDay}
+                    onChange={(e) => setWeeklyCollectionDay(parseInt(e.target.value, 10))}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                  >
+                    <option value={1}>Monday</option>
+                    <option value={2}>Tuesday</option>
+                    <option value={3}>Wednesday</option>
+                    <option value={4}>Thursday</option>
+                    <option value={5}>Friday</option>
+                    <option value={6}>Saturday</option>
+                    <option value={7}>Sunday</option>
+                  </select>
+                  {errors.weeklyCollectionDay && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.weeklyCollectionDay}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Dynamic Collection Date (Monthly) */}
+              {financeType === 'Monthly' && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Collection Date <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={monthlyCollectionDay}
+                    onChange={(e) => setMonthlyCollectionDay(parseInt(e.target.value, 10))}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.monthlyCollectionDay && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.monthlyCollectionDay}</p>
+                  )}
+                </div>
+              )}
 
               {/* Assign to Agent */}
               <div>
