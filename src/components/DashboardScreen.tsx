@@ -12,7 +12,7 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import type { Timeframe } from '../types';
+import { DASHBOARD_LINE_FILTER_OPTIONS, type DashboardLineFilter } from '../types';
 import { AddBorrowerModal } from './AddBorrowerModal';
 import { ActiveBorrowersModal } from './ActiveBorrowersModal';
 import { CollectionsModal } from './CollectionsModal';
@@ -30,7 +30,6 @@ export const DashboardScreen: React.FC = () => {
     borrowers,
     agents,
     timeframe,
-    setTimeframe,
     borrowerFilter,
     setBorrowerFilter,
     searchQuery,
@@ -40,8 +39,10 @@ export const DashboardScreen: React.FC = () => {
     getTodayDueCount,
     getCashInHand,
     getTotalOutFlow,
+    getBorrowerPaidAmount,
   } = useApp();
 
+  const [selectedLine, setSelectedLine] = useState<DashboardLineFilter>('All Lines');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isActiveBorrowersModalOpen, setIsActiveBorrowersModalOpen] = useState(false);
@@ -86,10 +87,10 @@ export const DashboardScreen: React.FC = () => {
       )
     : borrowers;
 
-  // Filter borrowers by the selected timeframe (Daily, Weekly, Monthly)
+  // Filter borrowers by the selected timeframe for Summary Cards
   const timeframeBorrowers = roleScopedBorrowers.filter((b) => (b.financeType || 'Daily') === timeframe);
 
-  // Metrics calculated strictly from borrowers in the selected timeframe
+  // Metrics calculated for top summary cards (Preserved canonical logic)
   const activeCount = timeframeBorrowers.filter((b) => b.status === 'active').length;
   const totalLoaned = timeframeBorrowers
     .filter((b) => b.status === 'active')
@@ -99,19 +100,36 @@ export const DashboardScreen: React.FC = () => {
   const cashInHand = getCashInHand();
   const outFlow = getTotalOutFlow();
 
-  // Filter borrowers based on Active/Closed tab and Search query
-  const filteredBorrowers = timeframeBorrowers.filter((b) => {
+  // Filter borrowers for the Dashboard Table:
+  // 1. Role scoping (Manager sees all company borrowers, Agent sees assigned only)
+  // 2. Line filter ('All Lines' includes legacy null lines, specific line matches exact collectionLine)
+  // 3. Status filter (Active vs Closed tab)
+  // 4. Search query (matches borrower name or phone)
+  const filteredBorrowers = roleScopedBorrowers.filter((b) => {
+    // 1. Line filter
+    if (selectedLine !== 'All Lines' && b.collectionLine !== selectedLine) {
+      return false;
+    }
+
+    // 2. Active / Closed status tab
     const matchesFilter =
       borrowerFilter === 'Active' ? b.status === 'active' : b.status === 'closed';
+    if (!matchesFilter) return false;
+
+    // 3. Search query (name or phone)
     const query = searchQuery.trim().toLowerCase();
-    const nameStr = (b.borrowerName || b.name || '').toLowerCase();
-    const phoneStr = (b.phoneNumber || b.phone || '');
-    const matchesSearch = query === '' || nameStr.includes(query) || phoneStr.includes(query);
-    return matchesFilter && matchesSearch;
+    if (query !== '') {
+      const nameStr = (b.borrowerName || b.name || '').toLowerCase();
+      const phoneStr = (b.phoneNumber || b.phone || '');
+      const matchesSearch = nameStr.includes(query) || phoneStr.includes(query);
+      if (!matchesSearch) return false;
+    }
+
+    return true;
   });
 
-  const handleSelectTimeframe = (tf: Timeframe) => {
-    setTimeframe(tf);
+  const handleSelectLine = (line: DashboardLineFilter) => {
+    setSelectedLine(line);
     setDropdownOpen(false);
   };
 
@@ -133,29 +151,30 @@ export const DashboardScreen: React.FC = () => {
             KN FINANCE
           </h1>
 
-          {/* Right: Daily Dropdown, Profile Icon */}
+          {/* Right: Line Filter Dropdown, Profile Icon */}
           <div className="flex items-center gap-2.5 sm:gap-3.5">
-            {/* Daily dropdown trigger */}
+            {/* Line dropdown trigger */}
             <div className="relative" ref={dropdownRef}>
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold text-[#1e293b] bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors"
+                title="Filter by Line"
               >
-                <span>{timeframe}</span>
+                <span>{selectedLine}</span>
                 <ChevronDown size={14} className="text-[#64748b]" />
               </button>
 
-              {/* Dropdown panel matching Screenshot 5 */}
+              {/* Line Dropdown panel */}
               {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-32 bg-white rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-50 overflow-hidden">
-                  {(['Daily', 'Weekly', 'Monthly'] as Timeframe[]).map((option) => (
+                <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                  {DASHBOARD_LINE_FILTER_OPTIONS.map((option) => (
                     <button
                       key={option}
                       type="button"
-                      onClick={() => handleSelectTimeframe(option)}
+                      onClick={() => handleSelectLine(option)}
                       className={`w-full text-left px-4 py-2 text-xs sm:text-sm font-semibold transition-colors flex items-center justify-between ${
-                        timeframe === option
+                        selectedLine === option
                           ? 'bg-[#eef2ff] text-[#4f46e5]'
                           : 'text-[#1e293b] hover:bg-slate-50'
                       }`}
@@ -402,84 +421,90 @@ export const DashboardScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Borrower Content Panel - Spans available width */}
-        <div className="bg-white rounded-2xl p-6 sm:p-10 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 min-h-[300px] flex flex-col justify-center">
-          {filteredBorrowers.length === 0 ? (
-            /* Empty State: EXACTLY text-only, NO illustration/icon */
-            <div className="text-center py-12 sm:py-16 px-4">
-              <h3 className="text-base sm:text-lg font-bold text-[#1e293b] mb-2">
-                No Borrowers Found
-              </h3>
-              <p className="text-xs sm:text-sm text-[#64748b] max-w-sm mx-auto leading-relaxed">
-                There are no active borrowers. Try a different category or add a new borrower.
-              </p>
-            </div>
-          ) : (
-            /* Populated State */
-            <div className="divide-y divide-slate-100">
-              {filteredBorrowers.map((borrower) => (
-                <div
-                  key={borrower.id}
-                  onClick={() => setSelectedBorrowerId(borrower.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      setSelectedBorrowerId(borrower.id);
-                    }
-                  }}
-                  className="py-4 flex items-center justify-between first:pt-0 last:pb-0 hover:bg-slate-50/80 px-3 rounded-xl transition-all cursor-pointer group"
-                >
-                  <div className="space-y-1">
-                    <h4 className="text-sm sm:text-base font-semibold text-[#1e293b] group-hover:text-[#4f46e5] transition-colors">
-                      {borrower.borrowerName || borrower.name}
-                    </h4>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-[#64748b]">
-                      <span>{borrower.phoneNumber || borrower.phone}</span>
-                      {(() => {
-                        const agentName = resolveAgentName(borrower, agents);
-                        return agentName ? (
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-[#475569] text-[10px] font-semibold">
-                            Agent: {agentName}
-                          </span>
-                        ) : null;
-                      })()}
-                      {borrower.repaymentDuration && (
-                        <span>• {borrower.repaymentDuration}</span>
-                      )}
-                      {borrower.endDate && (
-                        <span>• End: {borrower.endDate}</span>
-                      )}
-                      {borrower.parcelTokenMode && (
-                        <span className="px-2 py-0.5 rounded bg-indigo-50 text-[#4f46e5] text-[10px] font-semibold">
-                          Parcel Token
-                        </span>
-                      )}
-                      {borrower.isExistingLoan && (
-                        <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-semibold">
-                          Existing Loan
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm sm:text-base font-bold text-[#1e293b]">
-                      ₹{(borrower.loanAmount || borrower.amount || 0).toLocaleString('en-IN')}
-                    </p>
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mt-0.5 ${
-                        borrower.status === 'active'
-                          ? 'bg-emerald-50 text-emerald-600'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
+        {/* Borrower Content Panel - Compact Professional Read-Only Table */}
+        <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[700px]">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] sm:text-xs font-bold text-[#475569] tracking-wider uppercase">
+                  <th className="py-3.5 px-4 sm:px-6">BORROWER</th>
+                  <th className="py-3.5 px-4 sm:px-6">PHONE</th>
+                  <th className="py-3.5 px-4 sm:px-6">LINE</th>
+                  <th className="py-3.5 px-4 sm:px-6">TYPE</th>
+                  <th className="py-3.5 px-4 sm:px-6">AGENT</th>
+                  <th className="py-3.5 px-4 sm:px-6 text-right">PENDING</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
+                {filteredBorrowers.length === 0 ? (
+                  /* Empty State: Keep headers visible, show exact empty text */
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-12 px-4 text-center text-[#64748b] font-medium"
                     >
-                      {borrower.status === 'active' ? 'Active' : 'Closed'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                      No borrowers found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredBorrowers.map((borrower) => {
+                    const agentName = resolveAgentName(borrower, agents) || 'Unassigned';
+                    const paid = getBorrowerPaidAmount(borrower.id);
+                    const expReturn = borrower.expectedReturn || borrower.loanAmount || 0;
+                    const pending = borrower.status === 'closed' ? 0 : Math.max(0, expReturn - paid);
+
+                    return (
+                      <tr
+                        key={borrower.id}
+                        onClick={() => setSelectedBorrowerId(borrower.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            setSelectedBorrowerId(borrower.id);
+                          }
+                        }}
+                        className="hover:bg-indigo-50/40 cursor-pointer transition-colors group"
+                      >
+                        <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b] group-hover:text-[#4f46e5] transition-colors">
+                          {borrower.borrowerName || borrower.name}
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 text-[#475569]">
+                          {borrower.phoneNumber || borrower.phone || '—'}
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium">
+                          {borrower.collectionLine || '—'}
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6">
+                          {borrower.collectionMethod ? (
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                borrower.collectionMethod === 'Banking'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              }`}
+                            >
+                              {borrower.collectionMethod}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 text-[#475569]">
+                          <span className={agentName === 'Unassigned' ? 'text-slate-400 italic' : 'font-medium text-[#1e293b]'}>
+                            {agentName}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 text-right font-bold text-[#4f46e5]">
+                          ₹{pending.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
 

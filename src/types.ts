@@ -57,6 +57,16 @@ export const COLLECTION_LINES: CollectionLine[] = [
   'Lalgudi',
 ];
 
+export const DASHBOARD_LINE_FILTER_OPTIONS = [
+  'All Lines',
+  'Karumandapam',
+  'Manachanallur',
+  'Thiruverumbur',
+  'Lalgudi',
+] as const;
+
+export type DashboardLineFilter = (typeof DASHBOARD_LINE_FILTER_OPTIONS)[number];
+
 export type CollectionMethod = 'Hand Cash' | 'Banking';
 
 export const COLLECTION_METHODS: CollectionMethod[] = [
