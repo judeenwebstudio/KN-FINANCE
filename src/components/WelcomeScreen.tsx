@@ -35,11 +35,6 @@ export const WelcomeScreen: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Bottom Version */}
-      <div className="text-center text-xs text-[#94a3b8] font-medium pt-4 pb-2">
-        v1.8
-      </div>
     </div>
   );
 };
