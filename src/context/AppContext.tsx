@@ -159,6 +159,7 @@ function mapDbPaymentToApp(row: any, allBorrowers: Borrower[], allAgents: AgentU
     collectedByRole: isAgent ? 'agent' : 'manager',
     collectedBy: collectorAgent?.fullName || (isAgent ? 'Agent' : (currentMgrName || 'Manager')),
     financeType: row.finance_type || borrowerObj?.financeType || 'Daily',
+    collectionMethod: row.collection_method || null,
     note: row.note || undefined,
     createdAt: row.created_at || new Date().toISOString(),
   };
@@ -1042,6 +1043,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             amount: data.amount,
             payment_date: paymentDateIso,
             finance_type: data.financeType,
+            collection_method: data.collectionMethod ? data.collectionMethod.trim() : null,
             note: data.note?.trim() || null,
           });
 
@@ -1064,6 +1066,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newPayment: PaymentRecord = {
       id: paymentId,
       ...data,
+      collectionMethod: data.collectionMethod ? data.collectionMethod.trim() : null,
       note: data.note?.trim() || undefined,
       collectedByUserId: data.collectedByUserId !== undefined ? data.collectedByUserId : null,
       collectedByRole: data.collectedByRole || (data.collectedByUserId ? 'agent' : 'manager'),

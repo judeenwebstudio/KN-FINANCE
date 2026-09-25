@@ -209,6 +209,7 @@ export interface DbPayment {
   amount: number;
   payment_date: string;
   finance_type: DbFinanceType;
+  collection_method?: string | null;
   note: string | null;
   created_at: string;
 }
@@ -221,6 +222,7 @@ export interface DbPaymentInsert {
   amount: number;
   payment_date: string;
   finance_type?: DbFinanceType;
+  collection_method?: string | null;
   note?: string | null;
   created_at?: string;
 }
@@ -229,6 +231,7 @@ export interface DbPaymentUpdate {
   amount?: number;
   payment_date?: string;
   finance_type?: DbFinanceType;
+  collection_method?: string | null;
   note?: string | null;
 }
 

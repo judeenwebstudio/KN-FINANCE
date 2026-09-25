@@ -18,7 +18,8 @@ import {
   getBorrowerDocumentSignedUrl,
   formatFileSize,
 } from '../utils/documentStorage';
-import type { BorrowerDocument } from '../types';
+import { COLLECTION_METHODS } from '../types';
+import type { BorrowerDocument, CollectionMethod } from '../types';
 import {
   getBorrowerLoanSummary,
   getTodayIsoDate,
@@ -79,6 +80,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(getTodayIsoDate());
+  const [paymentMethod, setPaymentMethod] = useState<CollectionMethod | ''>('');
   const [collectorSelection, setCollectorSelection] = useState('manager');
   const [paymentNote, setPaymentNote] = useState('');
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -175,6 +177,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
         : String(loanSummary.totalPending)
     );
     setPaymentDate(getTodayIsoDate());
+    setPaymentMethod('');
     setCollectorSelection(currentRole === 'agent' ? `agent:${currentUser?.companyUserId || 'self'}` : 'manager');
     setPaymentNote('');
     setPaymentError(null);
@@ -185,6 +188,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   const executeCommitPayment = async () => {
     const parsedAmount = parseFloat(paymentAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) return;
+    if (!paymentMethod || !COLLECTION_METHODS.includes(paymentMethod as CollectionMethod)) return;
 
     setIsSubmittingPayment(true);
 
@@ -210,6 +214,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
       amount: parsedAmount,
       paymentDate: paymentDate,
       financeType: borrower.financeType || 'Daily',
+      collectionMethod: paymentMethod as CollectionMethod,
       collectedByUserId,
       collectedByRole,
       collectedBy,
@@ -284,6 +289,11 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
       setPaymentError(
         `Amount cannot exceed pending balance of ₹${loanSummary.totalPending.toLocaleString('en-IN')}`
       );
+      return;
+    }
+
+    if (!paymentMethod || !COLLECTION_METHODS.includes(paymentMethod as CollectionMethod)) {
+      setPaymentError('Please select a Payment Method');
       return;
     }
 
@@ -666,6 +676,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] sm:text-xs font-bold text-[#475569] tracking-wider uppercase">
                       <th className="py-3 px-4 sm:px-5">DATE</th>
                       <th className="py-3 px-4 sm:px-5">AMOUNT</th>
+                      <th className="py-3 px-4 sm:px-5">METHOD</th>
                       <th className="py-3 px-4 sm:px-5">COLLECTED BY</th>
                       <th className="py-3 px-4 sm:px-5">NOTE</th>
                     </tr>
@@ -674,7 +685,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                     {borrowerPayments.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={4}
+                          colSpan={5}
                           className="py-10 px-4 text-center text-[#64748b] font-medium"
                         >
                           No payments recorded yet.
@@ -688,6 +699,21 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                           </td>
                           <td className="py-3.5 px-4 sm:px-5 font-bold text-emerald-600">
                             ₹{p.amount.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3.5 px-4 sm:px-5">
+                            {p.collectionMethod ? (
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                  p.collectionMethod === 'Banking'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                }`}
+                              >
+                                {p.collectionMethod}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 sm:px-5 text-[#475569] font-medium">
                             {resolveCollectorName(p, manager, agents)}
@@ -797,7 +823,32 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                 </div>
               </div>
 
-              {/* 4. Collected By */}
+              {/* 4. Payment Method */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1e293b] mb-1">
+                  Payment Method <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={paymentMethod}
+                  onChange={(e) => {
+                    setPaymentMethod(e.target.value as CollectionMethod);
+                    if (paymentError) setPaymentError(null);
+                  }}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all cursor-pointer"
+                >
+                  <option value="" disabled>
+                    Select Payment Method
+                  </option>
+                  {COLLECTION_METHODS.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 5. Collected By */}
               <div>
                 <label className="block text-xs font-semibold text-[#1e293b] mb-1">
                   Collected By <span className="text-red-500">*</span>
@@ -885,6 +936,10 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Amount:</span>
                 <span className="font-bold text-emerald-600">₹{parseFloat(paymentAmount || '0').toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Payment Method:</span>
+                <span className="font-semibold text-[#1e293b]">{paymentMethod || '—'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Collected By:</span>

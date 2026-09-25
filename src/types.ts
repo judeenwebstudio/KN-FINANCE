@@ -130,6 +130,7 @@ export interface PaymentRecord {
   collectedBy: string; // e.g. 'Manager'
   collectedByUserId?: string | null;
   collectedByRole?: 'manager' | 'agent';
+  collectionMethod?: CollectionMethod | string | null;
   note?: string;
   financeType: 'Daily' | 'Weekly' | 'Monthly';
   createdAt: string;
