@@ -48,6 +48,15 @@ export interface StoredAgentRecord extends AgentUser {
   pinHash: string;
 }
 
+export type CollectionLine = 'Karumandapam' | 'Manachanallur' | 'Thiruverumbur' | 'Lalgudi';
+
+export const COLLECTION_LINES: CollectionLine[] = [
+  'Karumandapam',
+  'Manachanallur',
+  'Thiruverumbur',
+  'Lalgudi',
+];
+
 export interface Borrower {
   id: string;
   name: string;
@@ -59,6 +68,7 @@ export interface Borrower {
   financeType: 'Daily' | 'Weekly' | 'Monthly';
   weeklyCollectionDay?: number | null; // 1=Monday ... 7=Sunday (for Weekly)
   monthlyCollectionDay?: number | null; // 1..31 (for Monthly)
+  collectionLine?: CollectionLine | string | null;
   agentId?: string | null;
   assignedAgent?: string;
   agentCommission?: number;
@@ -86,6 +96,7 @@ export type NewBorrowerInput = {
   financeType: 'Daily' | 'Weekly' | 'Monthly';
   weeklyCollectionDay?: number | null; // 1=Monday ... 7=Sunday (for Weekly)
   monthlyCollectionDay?: number | null; // 1..31 (for Monthly)
+  collectionLine?: CollectionLine | string | null;
   agentId?: string | null;
   assignedAgent?: string;
   agentCommission?: number;

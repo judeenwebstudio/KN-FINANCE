@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
 import { calculateBorrowerEndDate } from '../utils/loanCalculations';
-import type { Timeframe, Borrower, NewBorrowerInput } from '../types';
+import { COLLECTION_LINES } from '../types';
+import type { Timeframe, Borrower, NewBorrowerInput, CollectionLine } from '../types';
 
 interface AddBorrowerModalProps {
   isOpen: boolean;
@@ -49,6 +50,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [financeType, setFinanceType] = useState<Timeframe>(defaultType);
   const [weeklyCollectionDay, setWeeklyCollectionDay] = useState<number>(1); // 1 = Monday ... 7 = Sunday
   const [monthlyCollectionDay, setMonthlyCollectionDay] = useState<number>(1); // 1 .. 31
+  const [collectionLine, setCollectionLine] = useState<CollectionLine>('Karumandapam');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [agentCommission, setAgentCommission] = useState('0');
   const [parcelTokenMode, setParcelTokenMode] = useState(false);
@@ -88,6 +90,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setFinanceType(initialBorrower.financeType || 'Daily');
         setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || 1);
         setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || 1);
+        setCollectionLine((initialBorrower.collectionLine as CollectionLine) || 'Karumandapam');
         setSelectedAgentId(initialBorrower.agentId || '');
         setAgentCommission(
           initialBorrower.agentCommission !== undefined
@@ -109,6 +112,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setFinanceType(initialType);
         setWeeklyCollectionDay(1);
         setMonthlyCollectionDay(1);
+        setCollectionLine('Karumandapam');
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
         setStartDateIso(getTodayIsoDate());
@@ -263,6 +267,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       }
     }
 
+    if (!collectionLine || !COLLECTION_LINES.includes(collectionLine)) {
+      newErrors.collectionLine = 'Please select a valid Line';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -328,6 +336,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       financeType,
       weeklyCollectionDay: financeType === 'Weekly' ? weeklyCollectionDay : null,
       monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
+      collectionLine: collectionLine ? collectionLine.trim() : 'Karumandapam',
       agentId: selectedAgentId ? selectedAgentId : null,
       agentCommission: commissionVal,
       parcelTokenMode,
@@ -613,6 +622,27 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                     </>
                   )}
                 </select>
+              </div>
+
+              {/* Line Dropdown */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Line <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={collectionLine}
+                  onChange={(e) => setCollectionLine(e.target.value as CollectionLine)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                >
+                  {COLLECTION_LINES.map((line) => (
+                    <option key={line} value={line}>
+                      {line}
+                    </option>
+                  ))}
+                </select>
+                {errors.collectionLine && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.collectionLine}</p>
+                )}
               </div>
 
               {/* Agent Commission */}
