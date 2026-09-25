@@ -111,6 +111,19 @@ export interface PaymentRecord {
   createdAt: string;
 }
 
+export interface BorrowerDocument {
+  id: string;
+  companyId: string;
+  borrowerId: string;
+  storagePath: string;
+  originalFileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedByUserId?: string | null;
+  createdAt: string;
+  signedUrl?: string;
+}
+
 export type Timeframe = 'Daily' | 'Weekly' | 'Monthly';
 export type BorrowerFilter = 'Active' | 'Closed';
 

@@ -5,8 +5,20 @@ import {
   AlertTriangle,
   CheckCircle2,
   Receipt,
+  FileText,
+  Image as ImageIcon,
+  Download,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { supabase } from '../lib/supabase';
+import {
+  fetchBorrowerDocuments,
+  getBorrowerDocumentSignedUrl,
+  formatFileSize,
+} from '../utils/documentStorage';
+import type { BorrowerDocument } from '../types';
 import {
   getBorrowerLoanSummary,
   getTodayIsoDate,
@@ -33,6 +45,34 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
     if (!borrowerId) return null;
     return borrowers.find((b) => b.id === borrowerId) || null;
   }, [borrowers, borrowerId]);
+
+  // Documents state
+  const [documents, setDocuments] = useState<BorrowerDocument[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [openingDocId, setOpeningDocId] = useState<string | null>(null);
+
+  // Fetch borrower documents when modal opens
+  useEffect(() => {
+    if (isOpen && borrower && currentUser && supabase) {
+      setLoadingDocs(true);
+      fetchBorrowerDocuments({
+        supabase,
+        companyId: currentUser.companyId,
+        borrowerId: borrower.id,
+      })
+        .then((res) => {
+          if (res.success) {
+            setDocuments(res.documents);
+          }
+        })
+        .finally(() => {
+          setLoadingDocs(false);
+        });
+    } else {
+      setDocuments([]);
+      setLoadingDocs(false);
+    }
+  }, [isOpen, borrower?.id, currentUser?.companyId]);
 
   // Collect Payment Dialog Sub-Modal State
   const [isCollectModalOpen, setIsCollectModalOpen] = useState(false);
@@ -192,6 +232,39 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
     setIsSubmittingPayment(false);
     setIsConfirmPaymentOpen(false);
     setIsCollectModalOpen(false);
+  };
+
+  // Handle Document View / Download Actions
+  const handleDocumentAction = async (doc: BorrowerDocument, action: 'view' | 'download') => {
+    if (!supabase) return;
+    setOpeningDocId(doc.id);
+    try {
+      const res = await getBorrowerDocumentSignedUrl({
+        supabase,
+        storagePath: doc.storagePath,
+        expiresInSeconds: 300,
+      });
+
+      if (res.success && res.signedUrl) {
+        if (action === 'view') {
+          window.open(res.signedUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          const link = document.createElement('a');
+          link.href = res.signedUrl;
+          link.download = doc.originalFileName;
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } else {
+        alert(res.error || 'Unable to generate secure document link.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error opening document.');
+    } finally {
+      setOpeningDocId(null);
+    }
   };
 
   // Submit Payment
@@ -480,6 +553,76 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Documents Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748b]">
+                  Documents {documents.length > 0 && `(${documents.length})`}
+                </h3>
+              </div>
+
+              {loadingDocs ? (
+                <div className="p-6 rounded-xl border border-slate-200/80 bg-white flex items-center justify-center gap-2 text-xs text-slate-500 font-medium shadow-sm">
+                  <Loader2 size={16} className="animate-spin text-[#4f46e5]" />
+                  <span>Loading borrower documents...</span>
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="p-5 rounded-xl border border-slate-200/80 bg-white text-center text-xs sm:text-sm text-slate-500 font-medium shadow-sm">
+                  No documents uploaded
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-200/80 bg-white shadow-sm hover:border-slate-300 transition-all"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-[#4f46e5] flex items-center justify-center shrink-0">
+                          {doc.mimeType === 'application/pdf' ? <FileText size={16} /> : <ImageIcon size={16} />}
+                        </div>
+                        <div className="truncate">
+                          <p className="font-semibold text-xs sm:text-sm text-[#1e293b] truncate" title={doc.originalFileName}>
+                            {doc.originalFileName}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {formatFileSize(doc.fileSize)} • {doc.mimeType.split('/')[1]?.toUpperCase() || 'FILE'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          disabled={openingDocId === doc.id}
+                          onClick={() => handleDocumentAction(doc, 'view')}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all flex items-center gap-1 disabled:opacity-50"
+                          title="View Document"
+                        >
+                          {openingDocId === doc.id ? (
+                            <Loader2 size={12} className="animate-spin text-[#4f46e5]" />
+                          ) : (
+                            <Eye size={12} />
+                          )}
+                          <span>View</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={openingDocId === doc.id}
+                          onClick={() => handleDocumentAction(doc, 'download')}
+                          className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-[#4f46e5] transition-all disabled:opacity-50"
+                          title="Download Document"
+                        >
+                          <Download size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 3. Payment History Section */}

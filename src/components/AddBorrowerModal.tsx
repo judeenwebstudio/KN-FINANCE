@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { X, Phone } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { X, Phone, Upload, Trash2, Plus, AlertCircle, FileText, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { supabase } from '../lib/supabase';
+import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
 import type { Timeframe, Borrower, NewBorrowerInput } from '../types';
 
 interface AddBorrowerModalProps {
@@ -72,7 +74,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   initialBorrower,
   onUpdate,
 }) => {
-  const { addBorrower, timeframe, agents, settings } = useApp();
+  const { addBorrower, timeframe, agents, settings, currentUser, isCloudAuth } = useApp();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Determine initial default finance type from settings or timeframe
   const defaultType = settings?.defaultFinanceType || timeframe || 'Daily';
@@ -92,6 +95,12 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
   const [startDateIso, setStartDateIso] = useState(getTodayIsoDate());
   const [isExistingLoan, setIsExistingLoan] = useState(false);
+
+  // Documents state (Optional multi-document upload)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [docUploadStatus, setDocUploadStatus] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -144,6 +153,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setParcelTokenMode(false);
         setIsExistingLoan(false);
       }
+      setSelectedFiles([]);
+      setUploadingDocs(false);
+      setDocUploadStatus(null);
+      setFileError(null);
       setErrors({});
     }
   }, [isOpen, timeframe, initialBorrower, settings?.defaultFinanceType]);
@@ -269,6 +282,49 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // Handle document file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError(null);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newFiles: File[] = [];
+    const errors: string[] = [];
+
+    Array.from(files).forEach((file) => {
+      const validation = validateBorrowerDocumentFile(file);
+      if (!validation.isValid) {
+        errors.push(validation.error || `Invalid file "${file.name}"`);
+      } else {
+        // Prevent exact duplicates by name and size
+        const isDuplicate =
+          selectedFiles.some((f) => f.name === file.name && f.size === file.size) ||
+          newFiles.some((f) => f.name === file.name && f.size === file.size);
+
+        if (!isDuplicate) {
+          newFiles.push(file);
+        }
+      }
+    });
+
+    if (errors.length > 0) {
+      setFileError(errors[0]);
+    }
+
+    if (newFiles.length > 0) {
+      setSelectedFiles((prev) => [...prev, ...newFiles]);
+    }
+
+    // Reset native input value so selecting the same file again works
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -304,8 +360,29 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     } else {
       const res = await addBorrower(payload);
       if (res && !res.success) {
-        setErrors(prev => ({ ...prev, general: res.error || 'Failed to save borrower to cloud' }));
+        setErrors((prev) => ({ ...prev, general: res.error || 'Failed to save borrower to cloud' }));
         return;
+      }
+
+      // Safe secondary upload for selected documents if any
+      if (res?.borrowerId && selectedFiles.length > 0 && isCloudAuth && currentUser && supabase) {
+        setUploadingDocs(true);
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          setDocUploadStatus(`Uploading document ${i + 1} of ${selectedFiles.length}...`);
+          const uploadRes = await uploadBorrowerDocument({
+            supabase,
+            companyId: currentUser.companyId,
+            borrowerId: res.borrowerId,
+            file,
+            userId: currentUser.companyUserId,
+          });
+          if (!uploadRes.success) {
+            console.error(`Failed to upload document "${file.name}":`, uploadRes.error);
+          }
+        }
+        setUploadingDocs(false);
+        setDocUploadStatus(null);
       }
     }
 
@@ -319,6 +396,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     setLoanAmount('');
     setDeductedAmount('');
     setExpectedReturn('');
+    setSelectedFiles([]);
+    setUploadingDocs(false);
+    setDocUploadStatus(null);
+    setFileError(null);
     setParcelTokenMode(false);
     setIsExistingLoan(false);
     setErrors({});
@@ -690,6 +771,107 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 This is an existing loan (manage past payments after saving)
               </label>
             </div>
+          </div>
+
+          {/* Section 3: Documents (Optional) */}
+          <div className="space-y-3 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
+                  Documents (Optional)
+                </h3>
+                <p className="text-xs text-[#64748b] mt-0.5">
+                  Upload borrower documents if available (PDF, JPG, PNG — Max 10MB per file)
+                </p>
+              </div>
+            </div>
+
+            {/* Hidden native file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            {/* Error message for invalid file */}
+            {fileError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2 animate-in fade-in">
+                <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <span>{fileError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFileError(null)}
+                  className="text-red-400 hover:text-red-700 ml-1"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* Selected Documents List */}
+            {selectedFiles.length > 0 && (
+              <div className="space-y-2">
+                {selectedFiles.map((file, idx) => (
+                  <div
+                    key={`${file.name}-${file.size}-${idx}`}
+                    className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs sm:text-sm text-[#1e293b] hover:border-slate-300 transition-all"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 text-[#4f46e5] flex items-center justify-center shrink-0">
+                        {file.type === 'application/pdf' ? <FileText size={16} /> : <ImageIcon size={16} />}
+                      </div>
+                      <div className="truncate">
+                        <p className="font-semibold text-slate-800 truncate">{file.name}</p>
+                        <p className="text-[11px] text-slate-400">{formatFileSize(file.size)}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(idx)}
+                      className="px-2.5 py-1 text-xs font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all flex items-center gap-1 shrink-0"
+                    >
+                      <Trash2 size={13} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Action Buttons: Upload Document OR + Add Another Document */}
+            {selectedFiles.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full sm:w-auto h-10 px-4 rounded-xl border border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/50 hover:bg-indigo-50 text-[#4f46e5] text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+              >
+                <Upload size={16} />
+                <span>Upload Document</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="h-9 px-3.5 rounded-xl border border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/40 text-[#4f46e5] text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-[0.99]"
+              >
+                <Plus size={15} />
+                <span>+ Add Another Document</span>
+              </button>
+            )}
+
+            {/* Upload progress during submission */}
+            {uploadingDocs && (
+              <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center gap-2.5 text-xs text-[#4f46e5] font-semibold animate-pulse">
+                <Upload size={15} className="animate-spin" />
+                <span>{docUploadStatus || 'Uploading borrower documents...'}</span>
+              </div>
+            )}
           </div>
 
           {/* Highlighted Bottom Summary: Net Amount Given */}

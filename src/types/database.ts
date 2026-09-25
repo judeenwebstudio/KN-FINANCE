@@ -165,6 +165,30 @@ export interface DbBorrowerUpdate {
   updated_at?: string;
 }
 
+export interface DbBorrowerDocument {
+  id: string;
+  company_id: string;
+  borrower_id: string;
+  storage_path: string;
+  original_file_name: string;
+  mime_type: string;
+  file_size: number;
+  uploaded_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface DbBorrowerDocumentInsert {
+  id?: string;
+  company_id: string;
+  borrower_id: string;
+  storage_path: string;
+  original_file_name: string;
+  mime_type: string;
+  file_size: number;
+  uploaded_by_user_id?: string | null;
+  created_at?: string;
+}
+
 export interface DbPayment {
   id: string;
   company_id: string;

@@ -57,7 +57,7 @@ interface AppContextType {
   toggleAgentStatus: (id: string) => void;
   setTimeframe: (tf: Timeframe) => void;
   setBorrowerFilter: (f: BorrowerFilter) => void;
-  addBorrower: (data: NewBorrowerInput) => Promise<{ success: boolean; error?: string }>;
+  addBorrower: (data: NewBorrowerInput) => Promise<{ success: boolean; error?: string; borrowerId?: string }>;
   updateBorrower: (id: string, data: Partial<NewBorrowerInput>) => Promise<{ success: boolean; error?: string }>;
   addPayment: (data: Omit<PaymentRecord, 'id' | 'createdAt'>) => Promise<{ success: boolean; error?: string }>;
   addActivity: (entry: Omit<ActivityLogEntry, 'id' | 'createdAt'>) => void;
@@ -835,13 +835,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const addBorrower = async (data: NewBorrowerInput): Promise<{ success: boolean; error?: string }> => {
+  const addBorrower = async (data: NewBorrowerInput): Promise<{ success: boolean; error?: string; borrowerId?: string }> => {
     if (isCloudAuth && currentUser && supabase) {
       try {
         const startIso = toDbDate(data.startDate) || getTodayIsoDate();
         const endIso = toDbDate(data.endDate);
 
-        const { error } = await (supabase as any)
+        const { data: insertedData, error } = await (supabase as any)
           .from('borrowers')
           .insert({
             company_id: currentUser.companyId,
@@ -863,15 +863,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             existing_loan: Boolean(data.isExistingLoan),
             parcel_token_mode: Boolean(data.parcelTokenMode),
             status: 'active',
-          });
+          })
+          .select('id')
+          .single();
 
         if (error) {
           console.error('Supabase addBorrower error:', error);
           return { success: false, error: error.message };
         }
 
+        const newId = insertedData?.id;
         await fetchCloudData();
-        return { success: true };
+        return { success: true, borrowerId: newId };
       } catch (err: any) {
         console.error('addBorrower exception:', err);
         return { success: false, error: err.message || 'Failed to create borrower in cloud.' };
@@ -925,7 +928,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       message: `Borrower ${data.borrowerName.trim()} was added.`,
     });
 
-    return { success: true };
+    return { success: true, borrowerId: newBorrower.id };
   };
 
   const updateBorrower = async (id: string, data: Partial<NewBorrowerInput>): Promise<{ success: boolean; error?: string }> => {
