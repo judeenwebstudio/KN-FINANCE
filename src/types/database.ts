@@ -445,6 +445,18 @@ export interface Database {
           message: string;
         }[];
       };
+      change_user_pin: {
+        Args: {
+          p_current_pin: string;
+          p_new_pin: string;
+          p_auth_user_id?: string | null;
+        };
+        Returns: {
+          status: string;
+          message: string;
+          lockout_seconds: number | null;
+        }[];
+      };
     };
   };
 }

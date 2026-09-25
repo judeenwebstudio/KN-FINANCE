@@ -358,3 +358,111 @@ export async function signOutOfCloud(): Promise<void> {
   }
   sessionStorage.removeItem('kn_finance_session_only');
 }
+
+export interface ChangePinResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  isLocked?: boolean;
+  lockoutSeconds?: number;
+}
+
+/**
+ * Changes the authenticated user's 4-digit PIN.
+ * Communicates with the serverless endpoint or authenticated RPC.
+ * Verification and hashing happen strictly on the server-side via bcrypt.
+ */
+export async function changeUserPin(params: {
+  currentPin: string;
+  newPin: string;
+}): Promise<ChangePinResult> {
+  const cleanCurr = (params.currentPin || '').trim();
+  const cleanNew = (params.newPin || '').trim();
+
+  // Client-side format checks (prevents unnecessary roundtrips on invalid input)
+  if (!cleanCurr) {
+    return { success: false, error: 'Current PIN is required.' };
+  }
+  if (!isValidPin(cleanCurr)) {
+    return { success: false, error: 'Current PIN must be exactly 4 numeric digits.' };
+  }
+  if (!cleanNew) {
+    return { success: false, error: 'New PIN must be exactly 4 numeric digits.' };
+  }
+  if (!isValidPin(cleanNew)) {
+    return { success: false, error: 'New PIN must be exactly 4 numeric digits.' };
+  }
+  if (cleanCurr === cleanNew) {
+    return { success: false, error: 'New PIN must be different from current PIN.' };
+  }
+
+  if (!isSupabaseConfigured || !supabase) {
+    return { success: false, error: 'Cloud service not available.' };
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return { success: false, error: 'Authentication required. Please sign in again.' };
+  }
+
+  // Attempt serverless endpoint first
+  try {
+    const response = await fetch('/api/auth/change-pin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        currentPin: cleanCurr,
+        newPin: cleanNew,
+      }),
+    });
+
+    if (response.status !== 404) {
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        return { success: true, message: data.message || 'PIN changed successfully.' };
+      }
+      return {
+        success: false,
+        error: data.error || 'Failed to change PIN.',
+        isLocked: data.locked || response.status === 429,
+        lockoutSeconds: data.lockoutSeconds,
+      };
+    }
+  } catch {
+    // Fall back to direct RPC if endpoint unreachable in local environment
+  }
+
+  // Fallback: Direct authenticated Supabase RPC execution
+  try {
+    const client = supabase as any;
+    const { data, error } = await client.rpc('change_user_pin', {
+      p_current_pin: cleanCurr,
+      p_new_pin: cleanNew,
+    });
+
+    if (error) {
+      return { success: false, error: error.message || 'Failed to change PIN.' };
+    }
+
+    const res = Array.isArray(data) ? data[0] : data;
+    if (!res) {
+      return { success: false, error: 'Unexpected response from database.' };
+    }
+
+    if (res.status === 'SUCCESS') {
+      return { success: true, message: res.message || 'PIN changed successfully.' };
+    }
+
+    return {
+      success: false,
+      error: res.message || 'Failed to change PIN.',
+      isLocked: res.status === 'LOCKED',
+      lockoutSeconds: res.lockout_seconds,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Change PIN service unreachable.' };
+  }
+}

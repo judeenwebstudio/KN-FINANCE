@@ -17,6 +17,7 @@ import { ManageUsersModal } from './ManageUsersModal';
 import { ActivityLogModal } from './ActivityLogModal';
 import { BackupRestoreModal } from './BackupRestoreModal';
 import { SettingsModal } from './SettingsModal';
+import { ChangePinModal } from './ChangePinModal';
 
 export const ProfileScreen: React.FC = () => {
   const { manager, currentUser, currentRole, logout, navigateTo } = useApp();
@@ -25,12 +26,14 @@ export const ProfileScreen: React.FC = () => {
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isChangePinOpen, setIsChangePinOpen] = useState(false);
 
-  // Role-based Menu Items (Agents do NOT see Manager-only administration controls)
+  // Role-based Menu Items (Both Manager and Agent can Change PIN)
   const menuItems = currentRole === 'agent'
     ? [
         { label: 'Activity Log', icon: ClipboardList },
         { label: 'Settings', icon: Settings },
+        { label: 'Change PIN', icon: KeyRound },
         { label: 'About', icon: Info },
         { label: 'Help', icon: HelpCircle },
         { label: 'Logout', icon: LogOut, isRed: true },
@@ -60,6 +63,8 @@ export const ProfileScreen: React.FC = () => {
       setIsBackupRestoreOpen(true);
     } else if (label === 'Settings') {
       setIsSettingsOpen(true);
+    } else if (label === 'Change PIN') {
+      setIsChangePinOpen(true);
     }
   };
 
@@ -187,6 +192,12 @@ export const ProfileScreen: React.FC = () => {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Change PIN Modal */}
+      <ChangePinModal
+        isOpen={isChangePinOpen}
+        onClose={() => setIsChangePinOpen(false)}
       />
     </div>
   );
