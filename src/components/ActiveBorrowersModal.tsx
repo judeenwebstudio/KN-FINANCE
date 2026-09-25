@@ -7,16 +7,42 @@ import { resolveAgentName } from '../utils/agentUtils';
 interface ActiveBorrowersModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSelectBorrower?: (borrowerId: string) => void;
 }
 
-export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({ isOpen, onClose }) => {
-  const { borrowers, timeframe, company, agents, getBorrowerPaidAmount, getBorrowerLastPaymentDate } = useApp();
+export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
+  isOpen,
+  onClose,
+  onSelectBorrower,
+}) => {
+  const {
+    borrowers,
+    currentRole,
+    currentUser,
+    timeframe,
+    company,
+    agents,
+    getBorrowerPaidAmount,
+    getBorrowerLastPaymentDate,
+  } = useApp();
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
 
+  // Role Scoped Borrowers: Agents see ONLY borrowers assigned to them
+  const roleScopedBorrowers =
+    currentRole === 'agent'
+      ? borrowers.filter(
+          (b) =>
+            b.agentId === currentUser?.companyUserId ||
+            (b.assignedAgent &&
+              currentUser?.fullName &&
+              b.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+        )
+      : borrowers;
+
   // Filter active borrowers for the currently selected Finance Type
-  const activeBorrowers = borrowers.filter(
+  const activeBorrowers = roleScopedBorrowers.filter(
     (b) => (b.financeType || 'Daily') === timeframe && b.status === 'active'
   );
 
@@ -32,6 +58,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({ isOp
     const agentName = resolveAgentName(b, agents);
 
     return {
+      id: b.id,
       name: b.borrowerName || b.name,
       agentName,
       totalLoan,
@@ -43,6 +70,14 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({ isOp
 
   const rows = activeBorrowers.map(getBorrowerRowData);
   const totalPending = rows.reduce((acc, curr) => acc + curr.pending, 0);
+
+  // Handle row click to open Borrower Details
+  const handleRowClick = (borrowerId?: string) => {
+    if (borrowerId && onSelectBorrower) {
+      onClose();
+      onSelectBorrower(borrowerId);
+    }
+  };
 
   // Print Handler
   const handlePrint = () => {
@@ -252,10 +287,16 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({ isOp
                   /* Populated rows */
                   rows.map((r, i) => (
                     <tr
-                      key={i}
-                      className="hover:bg-slate-50/60 transition-colors"
+                      key={r.id || i}
+                      onClick={() => handleRowClick(r.id)}
+                      className={`transition-colors ${
+                        onSelectBorrower
+                          ? 'cursor-pointer hover:bg-indigo-50/50 group'
+                          : 'hover:bg-slate-50/60'
+                      }`}
+                      title={onSelectBorrower ? 'Click to view borrower details' : undefined}
                     >
-                      <td className="py-3.5 px-4 sm:px-5 font-semibold text-[#1e293b]">
+                      <td className={`py-3.5 px-4 sm:px-5 font-semibold text-[#1e293b] ${onSelectBorrower ? 'group-hover:text-[#4f46e5]' : ''} transition-colors`}>
                         <div>{r.name}</div>
                         {r.agentName && (
                           <div className="text-[11px] font-normal text-[#64748b]">

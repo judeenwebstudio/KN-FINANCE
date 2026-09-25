@@ -493,6 +493,7 @@ export const DashboardScreen: React.FC = () => {
       <ActiveBorrowersModal
         isOpen={isActiveBorrowersModalOpen}
         onClose={() => setIsActiveBorrowersModalOpen(false)}
+        onSelectBorrower={(borrowerId) => setSelectedBorrowerId(borrowerId)}
       />
 
       {/* Collections Modal */}
