@@ -137,36 +137,96 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authUserId = authResult.auth_user_id;
     const internalEmail = `u_${authResult.company_user_id}@knfinance.internal`;
 
-    let userRecord = null;
+    let userRecord: any = null;
     if (authUserId) {
       const { data: userResp } = await supabaseAdmin.auth.admin.getUserById(authUserId);
       userRecord = userResp?.user;
     }
 
     if (!userRecord) {
-      // Create confirmed internal user in auth.users
+      // Attempt to create confirmed internal user in auth.users with server-controlled app_metadata
       const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: internalEmail,
         email_confirm: true,
-        user_metadata: {
+        app_metadata: {
           company_user_id: authResult.company_user_id,
           company_id: authResult.company_id,
           role: authResult.role,
-        }
+        },
       });
 
-      if (createErr || !newUser.user) {
-        console.error('[auth/login] Failed to create auth identity:', createErr?.message);
-        return res.status(500).json({ error: 'Authentication session generation failed.' });
+      if (newUser?.user) {
+        userRecord = newUser.user;
+      } else {
+        // If email already exists, direct single-user resolution via generateLink (no collection enumeration)
+        const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink',
+          email: internalEmail,
+        });
+
+        if (linkErr || !linkData?.user) {
+          console.error('[auth/login] Failed to resolve auth user by email:', createErr?.message || linkErr?.message);
+          return res.status(500).json({ error: 'Authentication identity resolution failed.' });
+        }
+
+        userRecord = linkData.user;
       }
+    }
 
-      userRecord = newUser.user;
+    if (!userRecord) {
+      return res.status(500).json({ error: 'Authentication session generation failed.' });
+    }
 
-      // Link newly created auth user ID back to company_users
-      await supabaseAdmin
-        .from('company_users')
-        .update({ auth_user_id: userRecord.id })
-        .eq('id', authResult.company_user_id);
+    // Always synchronize server-controlled app_metadata on every login (safely merging existing app_metadata)
+    const currentAppMeta = userRecord.app_metadata || {};
+    const needsAppMetaUpdate =
+      currentAppMeta.company_user_id !== authResult.company_user_id ||
+      currentAppMeta.company_id !== authResult.company_id ||
+      currentAppMeta.role !== authResult.role;
+
+    if (needsAppMetaUpdate) {
+      const { data: updatedUser, error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(
+        userRecord.id,
+        {
+          app_metadata: {
+            ...currentAppMeta,
+            company_user_id: authResult.company_user_id,
+            company_id: authResult.company_id,
+            role: authResult.role,
+          },
+        }
+      );
+      if (!updateErr && updatedUser?.user) {
+        userRecord = updatedUser.user;
+      }
+    }
+
+    // Authoritative Identity Linkage Verification & Repair via Hardened RPC
+    // (Never perform raw table updates that bypass collision and stale-link guards)
+    const { data: repairData, error: repairErr } = await supabaseAdmin.rpc('repair_auth_user_linkage', {
+      p_trusted_company_user_id: authResult.company_user_id,
+      p_auth_user_id: userRecord.id,
+    });
+
+    if (repairErr) {
+      console.error('[auth/login] Identity linkage RPC error during login:', repairErr.message);
+      return res.status(500).json({ error: 'Authentication linkage verification failed. Please try again.' });
+    }
+
+    const repairResult = Array.isArray(repairData) ? repairData[0] : repairData;
+
+    if (!repairResult || repairResult.status !== 'SUCCESS') {
+      const status = repairResult?.status;
+      if (status === 'CONFLICT') {
+        console.error('[auth/login] Identity conflict detected for company_user:', authResult.company_user_id);
+        return res.status(409).json({
+          error: 'Account identity conflict detected. Please contact administrator.',
+        });
+      }
+      console.error('[auth/login] Identity linkage check failed:', status, repairResult?.message);
+      return res.status(403).json({
+        error: 'Unable to verify account authorization linkage.',
+      });
     }
 
     // Generate authenticated session using admin link verification (no email dispatched)

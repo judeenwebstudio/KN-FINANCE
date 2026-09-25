@@ -47,8 +47,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const authUserId = userData.user.id;
-    // Extract trusted company_user_id established by server-side login session metadata
-    const trustedCompanyUserId = userData.user.user_metadata?.company_user_id || null;
 
     // 2. Validate Request Body
     const { currentPin, newPin } = req.body || {};
@@ -93,44 +91,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // 4. Narrowly Scoped Server-Controlled Identity Linkage Check & Repair
-    if (!trustedCompanyUserId) {
-      return res.status(403).json({
-        success: false,
-        error: 'User session is not associated with a company profile. Please log in again.',
-      });
-    }
+    // 4. Primary Identity Check & Narrowly Scoped Server-Controlled Legacy Linkage Repair
+    // Check if the authenticated user is already directly linked in company_users
+    const { data: directUser, error: directErr } = await supabaseAdmin
+      .from('company_users')
+      .select('id, company_id, status')
+      .eq('auth_user_id', authUserId)
+      .eq('status', 'active')
+      .maybeSingle();
 
-    const { data: repairData, error: repairErr } = await supabaseAdmin.rpc('repair_auth_user_linkage', {
-      p_trusted_company_user_id: trustedCompanyUserId,
-      p_auth_user_id: authUserId,
-    });
-
-    if (repairErr) {
-      console.error('[auth/change-pin] Identity linkage check error:', repairErr.message);
+    if (directErr) {
+      console.error('[auth/change-pin] Database query error on direct identity check:', directErr.message);
       return res.status(500).json({ error: 'Failed to verify account identity. Please try again.' });
     }
 
-    const repairResult = Array.isArray(repairData) ? repairData[0] : repairData;
+    // If unlinked in company_users (e.g. legacy Manager), perform server-controlled repair
+    if (!directUser) {
+      let trustedCompanyUserId: string | null = null;
 
-    if (!repairResult || repairResult.status !== 'SUCCESS') {
-      const status = repairResult?.status;
-      if (status === 'UNAUTHORIZED' || status === 'NOT_FOUND') {
+      // Evidence 1 (Preferred): Server-controlled app_metadata (immutable by client)
+      if (typeof userData.user.app_metadata?.company_user_id === 'string' && userData.user.app_metadata.company_user_id.trim()) {
+        trustedCompanyUserId = userData.user.app_metadata.company_user_id.trim();
+      }
+      // Evidence 2 (Legacy Migration Only): Server-generated internal email format
+      else if (typeof userData.user.email === 'string') {
+        const emailMatch = userData.user.email.match(/^u_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@knfinance\.internal$/i);
+        if (emailMatch) {
+          trustedCompanyUserId = emailMatch[1].toLowerCase();
+        }
+      }
+
+      // NOTE: user_metadata is client-editable and is strictly NOT used for identity repair.
+      // NOTE: Request body and query parameters are never trusted.
+
+      if (!trustedCompanyUserId) {
         return res.status(403).json({
           success: false,
-          error: 'User account is inactive or session identity is invalid.',
+          error: 'User session is not associated with an authoritative company profile. Please log in again.',
         });
       }
-      if (status === 'CONFLICT') {
-        return res.status(409).json({
-          success: false,
-          error: 'Account identity conflict detected. Please log out and log in again.',
-        });
-      }
-      return res.status(400).json({
-        success: false,
-        error: 'Unable to verify account linkage. Please contact support.',
+
+      const { data: repairData, error: repairErr } = await supabaseAdmin.rpc('repair_auth_user_linkage', {
+        p_trusted_company_user_id: trustedCompanyUserId,
+        p_auth_user_id: authUserId,
       });
+
+      if (repairErr) {
+        console.error('[auth/change-pin] Identity linkage check error:', repairErr.message);
+        return res.status(500).json({ error: 'Failed to verify account identity. Please try again.' });
+      }
+
+      const repairResult = Array.isArray(repairData) ? repairData[0] : repairData;
+
+      if (!repairResult || repairResult.status !== 'SUCCESS') {
+        const status = repairResult?.status;
+        if (status === 'UNAUTHORIZED' || status === 'NOT_FOUND') {
+          return res.status(403).json({
+            success: false,
+            error: 'User account is inactive or session identity is invalid.',
+          });
+        }
+        if (status === 'CONFLICT') {
+          return res.status(409).json({
+            success: false,
+            error: 'Account identity conflict detected. Please log out and log in again.',
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          error: 'Unable to verify account linkage. Please contact support.',
+        });
+      }
     }
 
     // 5. Execute Hardened Change PIN Stored Function (Strict auth.uid() Resolution)
