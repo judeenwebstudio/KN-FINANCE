@@ -404,6 +404,68 @@ export function getBorrowerLoanSummary(
   };
 }
 
+export interface ActionableDueResult {
+  hasActionableDue: boolean;
+  dueDateIso: string | null;
+  dueAmount: number;
+  isOverdue: boolean;
+  overdueCount: number;
+  overdueAmount: number;
+}
+
+/**
+ * Evaluates whether an active borrower currently has an actionable unpaid installment
+ * due on or before asOfDateIso (today or overdue).
+ * Uses the canonical FIFO schedule allocation waterfall.
+ */
+export function getCurrentActionableDue(
+  borrower: Borrower,
+  allPayments: PaymentRecord[],
+  asOfDateIso: string = getTodayIsoDate()
+): ActionableDueResult {
+  if (borrower.status !== 'active') {
+    return {
+      hasActionableDue: false,
+      dueDateIso: null,
+      dueAmount: 0,
+      isOverdue: false,
+      overdueCount: 0,
+      overdueAmount: 0,
+    };
+  }
+
+  const allocated = getAllocatedSchedule(borrower, allPayments, asOfDateIso);
+
+  // Find all unpaid installments due on or before asOfDateIso
+  const dueThroughToday = allocated.filter(
+    (inst) => inst.dueDateIso <= asOfDateIso && inst.pendingAmount > 0
+  );
+
+  if (dueThroughToday.length === 0) {
+    return {
+      hasActionableDue: false,
+      dueDateIso: null,
+      dueAmount: 0,
+      isOverdue: false,
+      overdueCount: 0,
+      overdueAmount: 0,
+    };
+  }
+
+  // Earliest unpaid installment due on or before today
+  const earliestUnpaid = dueThroughToday[0];
+  const overdueInsts = dueThroughToday.filter((inst) => inst.dueDateIso < asOfDateIso);
+
+  return {
+    hasActionableDue: true,
+    dueDateIso: earliestUnpaid.dueDateIso,
+    dueAmount: earliestUnpaid.pendingAmount,
+    isOverdue: earliestUnpaid.dueDateIso < asOfDateIso,
+    overdueCount: overdueInsts.length,
+    overdueAmount: overdueInsts.reduce((sum, inst) => sum + inst.pendingAmount, 0),
+  };
+}
+
 // ==========================================
 // FINANCIAL ANALYTICS PERIOD DATA & CALCULATIONS
 // ==========================================

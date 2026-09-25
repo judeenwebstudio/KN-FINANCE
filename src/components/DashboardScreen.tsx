@@ -22,13 +22,17 @@ import { BorrowerDetailsModal } from './BorrowerDetailsModal';
 import { CashInHandModal } from './CashInHandModal';
 import { OutFlowModal } from './OutFlowModal';
 import { resolveAgentName } from '../utils/agentUtils';
+import { getCurrentActionableDue, getTodayIsoDate } from '../utils/loanCalculations';
+import { formatAppDate } from '../utils/dateUtils';
 
 export const DashboardScreen: React.FC = () => {
   const {
     currentUser,
     currentRole,
     borrowers,
+    payments,
     agents,
+    settings,
     timeframe,
     borrowerFilter,
     setBorrowerFilter,
@@ -100,10 +104,12 @@ export const DashboardScreen: React.FC = () => {
   const cashInHand = getCashInHand();
   const outFlow = getTotalOutFlow();
 
-  // Filter borrowers for the Dashboard Table:
+  const todayIso = getTodayIsoDate();
+
+  // Filter borrowers for the Dashboard Table / Work Queue:
   // 1. Role scoping (Manager sees all company borrowers, Agent sees assigned only)
   // 2. Line filter ('All Lines' includes legacy null lines, specific line matches exact collectionLine)
-  // 3. Status filter (Active vs Closed tab)
+  // 3. Status filter & Work Queue (Active view shows only borrowers with an actionable due today or overdue)
   // 4. Search query (matches borrower name or phone)
   const filteredBorrowers = roleScopedBorrowers.filter((b) => {
     // 1. Line filter
@@ -111,10 +117,14 @@ export const DashboardScreen: React.FC = () => {
       return false;
     }
 
-    // 2. Active / Closed status tab
-    const matchesFilter =
-      borrowerFilter === 'Active' ? b.status === 'active' : b.status === 'closed';
-    if (!matchesFilter) return false;
+    // 2. Status & Work Queue filter
+    if (borrowerFilter === 'Active') {
+      if (b.status !== 'active') return false;
+      const actionableDue = getCurrentActionableDue(b, payments, todayIso);
+      if (!actionableDue.hasActionableDue) return false;
+    } else {
+      if (b.status !== 'closed') return false;
+    }
 
     // 3. Search query (name or phone)
     const query = searchQuery.trim().toLowerCase();
@@ -421,10 +431,10 @@ export const DashboardScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Borrower Content Panel - Compact Professional Read-Only Table */}
+        {/* Borrower Content Panel - Compact Professional Read-Only Work Queue Table */}
         <div className="bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[700px]">
+            <table className="w-full text-left border-collapse min-w-[760px]">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] sm:text-xs font-bold text-[#475569] tracking-wider uppercase">
                   <th className="py-3.5 px-4 sm:px-6">BORROWER</th>
@@ -432,6 +442,7 @@ export const DashboardScreen: React.FC = () => {
                   <th className="py-3.5 px-4 sm:px-6">LINE</th>
                   <th className="py-3.5 px-4 sm:px-6">TYPE</th>
                   <th className="py-3.5 px-4 sm:px-6">AGENT</th>
+                  <th className="py-3.5 px-4 sm:px-6">DUE DATE</th>
                   <th className="py-3.5 px-4 sm:px-6 text-right">PENDING</th>
                 </tr>
               </thead>
@@ -440,7 +451,7 @@ export const DashboardScreen: React.FC = () => {
                   /* Empty State: Keep headers visible, show exact empty text */
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-12 px-4 text-center text-[#64748b] font-medium"
                     >
                       No borrowers found.
@@ -452,6 +463,10 @@ export const DashboardScreen: React.FC = () => {
                     const paid = getBorrowerPaidAmount(borrower.id);
                     const expReturn = borrower.expectedReturn || borrower.loanAmount || 0;
                     const pending = borrower.status === 'closed' ? 0 : Math.max(0, expReturn - paid);
+                    const actionableDue = getCurrentActionableDue(borrower, payments, todayIso);
+                    const formattedDueDate = borrower.status === 'active' && actionableDue.dueDateIso
+                      ? formatAppDate(actionableDue.dueDateIso, settings.dateFormat)
+                      : '—';
 
                     return (
                       <tr
@@ -486,6 +501,9 @@ export const DashboardScreen: React.FC = () => {
                           <span className={agentName === 'Unassigned' ? 'text-slate-400 italic' : 'font-medium text-[#1e293b]'}>
                             {agentName}
                           </span>
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium whitespace-nowrap">
+                          {formattedDueDate}
                         </td>
                         <td className="py-3.5 px-4 sm:px-6 text-right font-bold text-[#4f46e5]">
                           ₹{pending.toLocaleString('en-IN')}
