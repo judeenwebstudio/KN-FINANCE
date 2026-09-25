@@ -18,6 +18,8 @@ import { ActivityLogModal } from './ActivityLogModal';
 import { BackupRestoreModal } from './BackupRestoreModal';
 import { SettingsModal } from './SettingsModal';
 import { ChangePinModal } from './ChangePinModal';
+import { AboutModal } from './AboutModal';
+import { HelpModal } from './HelpModal';
 
 export const ProfileScreen: React.FC = () => {
   const { manager, currentUser, currentRole, logout, navigateTo } = useApp();
@@ -27,6 +29,8 @@ export const ProfileScreen: React.FC = () => {
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChangePinOpen, setIsChangePinOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // Role-based Menu Items (Both Manager and Agent can Change PIN)
   const menuItems = currentRole === 'agent'
@@ -65,6 +69,10 @@ export const ProfileScreen: React.FC = () => {
       setIsSettingsOpen(true);
     } else if (label === 'Change PIN') {
       setIsChangePinOpen(true);
+    } else if (label === 'About') {
+      setIsAboutOpen(true);
+    } else if (label === 'Help') {
+      setIsHelpOpen(true);
     }
   };
 
@@ -198,6 +206,18 @@ export const ProfileScreen: React.FC = () => {
       <ChangePinModal
         isOpen={isChangePinOpen}
         onClose={() => setIsChangePinOpen(false)}
+      />
+
+      {/* About Modal */}
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
+      />
+
+      {/* Help Modal */}
+      <HelpModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
       />
     </div>
   );
