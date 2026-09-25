@@ -18,7 +18,7 @@ interface AddBorrowerModalProps {
 const DURATION_OPTIONS: Record<Timeframe, string[]> = {
   Daily: ['30 Days', '50 Days', '60 Days', '90 Days', '100 Days'],
   Weekly: ['10 Weeks', '12 Weeks', '15 Weeks', '20 Weeks'],
-  Monthly: ['3 Months', '6 Months', '9 Months', '12 Months', '24 Months'],
+  Monthly: ['1 Month', '2 Months', '3 Months', '6 Months', '9 Months', '12 Months', '24 Months'],
 };
 
 // Helper to get today in YYYY-MM-DD for <input type="date">
