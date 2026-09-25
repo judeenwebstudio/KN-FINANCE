@@ -456,17 +456,9 @@ export const DashboardScreen: React.FC = () => {
                     return (
                       <tr
                         key={borrower.id}
-                        onClick={() => setSelectedBorrowerId(borrower.id)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            setSelectedBorrowerId(borrower.id);
-                          }
-                        }}
-                        className="hover:bg-indigo-50/40 cursor-pointer transition-colors group"
+                        className="hover:bg-slate-50/60 transition-colors"
                       >
-                        <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b] group-hover:text-[#4f46e5] transition-colors">
+                        <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b]">
                           {borrower.borrowerName || borrower.name}
                         </td>
                         <td className="py-3.5 px-4 sm:px-6 text-[#475569]">
