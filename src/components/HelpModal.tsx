@@ -112,7 +112,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               Open <span className="font-bold text-[#4f46e5]">Borrower Details</span> and click <span className="font-bold text-[#4f46e5]">Collect Payment</span>.
             </li>
             <li>
-              Enter the collected installment amount, payment date, and collection method (Cash, GPay, PhonePe, Paytm, or Bank Transfer).
+              Enter the collected installment amount, payment date, and payment method (<span className="font-semibold text-[#1e293b]">Hand Cash</span> or <span className="font-semibold text-[#1e293b]">Banking</span>).
             </li>
             <li>
               Submitting the payment immediately updates the borrower ledger, settles due installments using the FIFO waterfall rule, and adjusts cash in hand.
