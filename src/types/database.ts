@@ -445,6 +445,16 @@ export interface Database {
           message: string;
         }[];
       };
+      repair_auth_user_linkage: {
+        Args: {
+          p_trusted_company_user_id: string;
+          p_auth_user_id: string;
+        };
+        Returns: {
+          status: string;
+          message: string;
+        }[];
+      };
       change_user_pin: {
         Args: {
           p_current_pin: string;

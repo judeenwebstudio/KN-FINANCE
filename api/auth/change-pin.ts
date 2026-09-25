@@ -47,6 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const authUserId = userData.user.id;
+    // Extract trusted company_user_id established by server-side login session metadata
+    const trustedCompanyUserId = userData.user.user_metadata?.company_user_id || null;
 
     // 2. Validate Request Body
     const { currentPin, newPin } = req.body || {};
@@ -91,7 +93,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // 4. Execute Server-Side Stored Function (Bcrypt + Rate Limit + Audit Log)
+    // 4. Narrowly Scoped Server-Controlled Identity Linkage Check & Repair
+    if (!trustedCompanyUserId) {
+      return res.status(403).json({
+        success: false,
+        error: 'User session is not associated with a company profile. Please log in again.',
+      });
+    }
+
+    const { data: repairData, error: repairErr } = await supabaseAdmin.rpc('repair_auth_user_linkage', {
+      p_trusted_company_user_id: trustedCompanyUserId,
+      p_auth_user_id: authUserId,
+    });
+
+    if (repairErr) {
+      console.error('[auth/change-pin] Identity linkage check error:', repairErr.message);
+      return res.status(500).json({ error: 'Failed to verify account identity. Please try again.' });
+    }
+
+    const repairResult = Array.isArray(repairData) ? repairData[0] : repairData;
+
+    if (!repairResult || repairResult.status !== 'SUCCESS') {
+      const status = repairResult?.status;
+      if (status === 'UNAUTHORIZED' || status === 'NOT_FOUND') {
+        return res.status(403).json({
+          success: false,
+          error: 'User account is inactive or session identity is invalid.',
+        });
+      }
+      if (status === 'CONFLICT') {
+        return res.status(409).json({
+          success: false,
+          error: 'Account identity conflict detected. Please log out and log in again.',
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        error: 'Unable to verify account linkage. Please contact support.',
+      });
+    }
+
+    // 5. Execute Hardened Change PIN Stored Function (Strict auth.uid() Resolution)
     const { data, error: rpcErr } = await supabaseAdmin.rpc('change_user_pin', {
       p_current_pin: cleanCurr,
       p_new_pin: cleanNew,
