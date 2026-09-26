@@ -119,6 +119,14 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
           amountColor: 'text-blue-600',
           icon: <ArrowDownRight size={14} className="text-blue-600 shrink-0" />,
         };
+      case 'DEDUCTED_AMOUNT':
+        return {
+          label: 'Deduction Retained',
+          color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          sign: '+',
+          amountColor: 'text-emerald-600',
+          icon: <ArrowDownRight size={14} className="text-emerald-600 shrink-0" />,
+        };
       case 'LOAN_DISBURSED':
         return {
           label: 'Loan Disbursed',
@@ -279,6 +287,7 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
                   { key: 'ALL', label: 'All' },
                   { key: 'CASH_ADDED', label: 'Cash Added' },
                   { key: 'PAYMENT_COLLECTED', label: 'Collections' },
+                  { key: 'DEDUCTED_AMOUNT', label: 'Deductions' },
                   { key: 'LOAN_DISBURSED', label: 'Disbursements' },
                   { key: 'CASH_DECREASED', label: 'Decreased' },
                 ].map((f) => (

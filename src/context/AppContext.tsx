@@ -1300,6 +1300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBorrowers(prev => [newBorrower, ...prev]);
 
     const loanDisbursedAmt = newBorrower.loanAmount || newBorrower.amount || 0;
+    const deductedAmt = newBorrower.deductedAmount || 0;
 
     if (loanDisbursedAmt > 0) {
       const ledgerEntry: CashLedgerEntry = {
@@ -1320,6 +1321,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return prev;
         }
         return [ledgerEntry, ...prev];
+      });
+    }
+
+    if (deductedAmt > 0) {
+      const deductionEntry: CashLedgerEntry = {
+        id: `cash_deduct_${newBorrower.id}_${Date.now()}`,
+        companyId: currentUser?.companyId,
+        transactionType: 'DEDUCTED_AMOUNT',
+        amount: deductedAmt,
+        sourceType: 'DEDUCTION',
+        borrowerId: newBorrower.id,
+        borrowerName: newBorrower.borrowerName,
+        note: `Deducted amount retained for ${newBorrower.borrowerName}`,
+        performedByUserId: currentUser?.companyUserId || null,
+        performedByName: currentUser?.fullName || (currentRole === 'agent' ? 'Agent' : 'Manager'),
+        createdAt: now,
+      };
+      setCashLedger(prev => {
+        if (prev.some(e => e.transactionType === 'DEDUCTED_AMOUNT' && e.borrowerId === newBorrower.id)) {
+          return prev;
+        }
+        return [deductionEntry, ...prev];
       });
     }
 
@@ -1606,7 +1629,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const getCashInHand = (): number => {
     const inflows = cashLedger
-      .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED')
+      .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED' || e.transactionType === 'DEDUCTED_AMOUNT')
       .reduce((sum, e) => sum + e.amount, 0);
     const outflows = cashLedger
       .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')

@@ -299,9 +299,9 @@ export interface DbCompanySettingsUpdate {
 export interface DbCompanyCashLedger {
   id: string;
   company_id: string;
-  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED' | 'AGENT_COMMISSION';
+  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED' | 'AGENT_COMMISSION' | 'DEDUCTED_AMOUNT';
   amount: number;
-  source_type: 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION';
+  source_type: 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION' | 'DEDUCTION';
   borrower_id: string | null;
   payment_id: string | null;
   note: string | null;
@@ -312,9 +312,9 @@ export interface DbCompanyCashLedger {
 export interface DbCompanyCashLedgerInsert {
   id?: string;
   company_id: string;
-  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED' | 'AGENT_COMMISSION';
+  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED' | 'AGENT_COMMISSION' | 'DEDUCTED_AMOUNT';
   amount: number;
-  source_type?: 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION';
+  source_type?: 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION' | 'DEDUCTION';
   borrower_id?: string | null;
   payment_id?: string | null;
   note?: string | null;

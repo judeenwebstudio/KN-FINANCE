@@ -222,9 +222,10 @@ export type CashTransactionType =
   | 'CASH_DECREASED'
   | 'LOAN_DISBURSED'
   | 'PAYMENT_COLLECTED'
+  | 'DEDUCTED_AMOUNT'
   | 'AGENT_COMMISSION';
 
-export type CashSourceType = 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION';
+export type CashSourceType = 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION' | 'DEDUCTION';
 
 export interface CashLedgerEntry {
   id: string;
