@@ -19,7 +19,6 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
     borrowers,
     currentRole,
     currentUser,
-    timeframe,
     company,
     agents,
     getBorrowerPaidAmount,
@@ -41,9 +40,9 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         )
       : borrowers;
 
-  // Filter active borrowers for the currently selected Finance Type
+  // Filter all active borrowers for current role scope
   const activeBorrowers = roleScopedBorrowers.filter(
-    (b) => (b.financeType || 'Daily') === timeframe && b.status === 'active'
+    (b) => b.status === 'active'
   );
 
   const borrowerCount = activeBorrowers.length;
@@ -115,7 +114,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
 
     ctx.fillStyle = '#64748b';
     ctx.font = '500 14px system-ui, sans-serif';
-    ctx.fillText(`${timeframe} Finance • ${countLabel}`, 40, 114);
+    ctx.fillText(`Active Borrowers • ${countLabel}`, 40, 114);
 
     // Table Header Background
     let currentY = headerHeight;
@@ -185,7 +184,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
 
     // Trigger Download
     const link = document.createElement('a');
-    link.download = `KN_FINANCE_Active_Borrowers_${timeframe}.png`;
+    link.download = 'KN_FINANCE_Active_Borrowers.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -205,9 +204,6 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
               <h2 className="text-xl font-bold tracking-tight text-[#1e293b]">
                 Active Borrowers
               </h2>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold tracking-wide rounded bg-[#eef2ff] text-[#4f46e5]">
-                {timeframe}
-              </span>
             </div>
             <p className="text-xs sm:text-sm font-medium text-[#64748b] mt-0.5">
               {countLabel}
@@ -255,7 +251,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         <div className="hidden print:block px-6 pt-4 pb-2 border-b border-slate-200">
           <h1 className="text-2xl font-bold text-[#4f46e5]">{company?.companyName || 'KN FINANCE'}</h1>
           <p className="text-sm text-slate-600">
-            Active Borrowers Report • {timeframe} Finance • {countLabel}
+            Active Borrowers Report • {countLabel}
           </p>
         </div>
 

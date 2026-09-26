@@ -33,7 +33,6 @@ export const DashboardScreen: React.FC = () => {
     payments,
     agents,
     settings,
-    timeframe,
     collectionLines,
     borrowerFilter,
     setBorrowerFilter,
@@ -99,16 +98,14 @@ export const DashboardScreen: React.FC = () => {
       )
     : borrowers;
 
-  // Filter borrowers by the selected timeframe for Summary Cards
-  const timeframeBorrowers = roleScopedBorrowers.filter((b) => (b.financeType || 'Daily') === timeframe);
+  const activeRoleScopedBorrowers = roleScopedBorrowers.filter((b) => b.status === 'active');
 
-  // Metrics calculated for top summary cards (Preserved canonical logic)
-  const activeCount = timeframeBorrowers.filter((b) => b.status === 'active').length;
-  const totalLoaned = timeframeBorrowers
-    .filter((b) => b.status === 'active')
+  // Metrics calculated for top summary cards
+  const activeCount = activeRoleScopedBorrowers.length;
+  const totalLoaned = activeRoleScopedBorrowers
     .reduce((acc, curr) => acc + (curr.loanAmount || curr.amount || 0), 0);
-  const collectedToday = getTodayCollectedAmount(timeframe);
-  const dueTodayCount = getTodayDueCount(timeframe);
+  const collectedToday = getTodayCollectedAmount();
+  const dueTodayCount = getTodayDueCount();
   const cashInHand = getCashInHand();
   const outFlow = getTotalOutFlow();
 

@@ -9,7 +9,7 @@ interface DueTodayModalProps {
 }
 
 export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose }) => {
-  const { timeframe, getDueBorrowersForDate, company, settings } = useApp();
+  const { getDueBorrowersForDate, company, settings } = useApp();
   const [selectedDateIso, setSelectedDateIso] = useState<string>(getTodayIsoDate());
 
   // Default to today whenever modal opens
@@ -21,8 +21,8 @@ export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose })
 
   if (!isOpen) return null;
 
-  // Retrieve dues for selected date and currently active Finance Type
-  const dueItems = getDueBorrowersForDate(selectedDateIso, timeframe);
+  // Retrieve dues for selected date across all active borrowers
+  const dueItems = getDueBorrowersForDate(selectedDateIso);
   const totalDue = dueItems.reduce((acc, curr) => acc + curr.pendingAmount, 0);
   const formattedDisplay = formatAppDate(selectedDateIso, settings.dateFormat);
 
@@ -67,7 +67,7 @@ export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose })
 
     ctx.fillStyle = '#64748b';
     ctx.font = '500 14px system-ui, sans-serif';
-    ctx.fillText(`${timeframe} Finance • ${formattedDisplay}`, 40, 114);
+    ctx.fillText(`Due Report • ${formattedDisplay}`, 40, 114);
 
     let currentY = headerHeight;
 
@@ -142,7 +142,7 @@ export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose })
 
     // Download
     const link = document.createElement('a');
-    link.download = `KN_FINANCE_Due_Today_${timeframe}_${selectedDateIso}.png`;
+    link.download = `KN_FINANCE_Due_Today_${selectedDateIso}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -161,9 +161,6 @@ export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose })
               <h2 className="text-xl font-bold tracking-tight text-[#1e293b]">
                 Due Today (All)
               </h2>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold tracking-wide rounded bg-[#eef2ff] text-[#4f46e5]">
-                {timeframe}
-              </span>
             </div>
 
             {/* Date Selector: [Calendar Icon] 23 Sept 2026 ▼ */}
@@ -229,7 +226,7 @@ export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose })
         <div className="hidden print:block px-6 pt-4 pb-2 border-b border-slate-200">
           <h1 className="text-2xl font-bold text-[#4f46e5]">{company?.companyName || 'KN FINANCE'}</h1>
           <p className="text-sm text-slate-600">
-            Due Today (All) Report • {timeframe} Finance • {formattedDisplay}
+            Due Today (All) Report • {formattedDisplay}
           </p>
         </div>
 

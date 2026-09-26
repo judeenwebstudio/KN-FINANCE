@@ -78,9 +78,9 @@ interface AppContextType {
   decreaseManualCash: (amount: number, note?: string) => void;
   getBorrowerPaidAmount: (borrowerId: string) => number;
   getBorrowerLastPaymentDate: (borrowerId: string) => string;
-  getTodayCollectedAmount: (tf: Timeframe) => number;
-  getDueBorrowersForDate: (targetDateIso: string, tf: Timeframe) => DueBorrowerItem[];
-  getTodayDueCount: (tf: Timeframe) => number;
+  getTodayCollectedAmount: (tf?: Timeframe) => number;
+  getDueBorrowersForDate: (targetDateIso: string, tf?: Timeframe) => DueBorrowerItem[];
+  getTodayDueCount: (tf?: Timeframe) => number;
   settings: AppSettings;
   updateSettings: (partial: Partial<AppSettings>) => void;
   resetSettings: () => void;
@@ -1541,19 +1541,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return formatDisplayDate(latest.paymentDate) || '-';
   };
 
-  const getTodayCollectedAmount = (tf: Timeframe): number => {
+  const getTodayCollectedAmount = (tf?: Timeframe): number => {
     const todayIso = getTodayIsoDate();
     return payments
-      .filter(p => p.paymentDate === todayIso && p.financeType === tf)
+      .filter(p => p.paymentDate === todayIso && (!tf || p.financeType === tf))
       .reduce((sum, p) => sum + p.amount, 0);
   };
 
-  const getDueBorrowersForDate = (targetDateIso: string, tf: Timeframe): DueBorrowerItem[] => {
+  const getDueBorrowersForDate = (targetDateIso: string, tf?: Timeframe): DueBorrowerItem[] => {
     const [y, m, d] = targetDateIso.split('-');
     const targetDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
 
-    const relevantBorrowers = borrowers.filter(
-      (b) => (b.financeType || 'Daily') === tf && b.status === 'active'
+    // Role-scoped borrowers for due calculation
+    const roleScopedList = currentRole === 'agent'
+      ? borrowers.filter(
+          (b) =>
+            b.agentId === currentUser?.companyUserId ||
+            (b.assignedAgent &&
+              currentUser?.fullName &&
+              b.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+        )
+      : borrowers;
+
+    const relevantBorrowers = roleScopedList.filter(
+      (b) => (!tf || (b.financeType || 'Daily') === tf) && b.status === 'active'
     );
 
     const dueItems: DueBorrowerItem[] = [];
@@ -1586,7 +1597,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return dueItems;
   };
 
-  const getTodayDueCount = (tf: Timeframe): number => {
+  const getTodayDueCount = (tf?: Timeframe): number => {
     const todayIso = getTodayIsoDate();
     const dues = getDueBorrowersForDate(todayIso, tf);
     return dues.length;
