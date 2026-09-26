@@ -28,6 +28,16 @@ import {
 
 export type { NewBorrowerInput };
 
+export interface CompanyCashSummary {
+  cashInHand: number;
+  totalOutFlow: number;
+  totalAdded: number;
+  totalDecreased: number;
+  totalDisbursed: number;
+  totalCollected: number;
+  totalDeducted: number;
+}
+
 export interface DueBorrowerItem {
   borrower: Borrower;
   dueAmount: number;
@@ -49,6 +59,7 @@ interface AppContextType {
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
   cashLedger: CashLedgerEntry[];
+  companyCashSummary: CompanyCashSummary | null;
   timeframe: Timeframe;
   borrowerFilter: BorrowerFilter;
   searchQuery: string;
@@ -1774,6 +1785,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         payments,
         activityLogs,
         cashLedger,
+        companyCashSummary,
         timeframe,
         borrowerFilter,
         searchQuery,

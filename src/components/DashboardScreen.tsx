@@ -253,21 +253,15 @@ export const DashboardScreen: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {/* CARD 1: Cash in Hand */}
           <div
-            {...(currentRole === 'manager'
-              ? {
-                  onClick: () => setIsCashInHandModalOpen(true),
-                  role: 'button',
-                  tabIndex: 0,
-                  onKeyDown: (e: React.KeyboardEvent) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      setIsCashInHandModalOpen(true);
-                    }
-                  },
-                }
-              : {})}
-            className={`bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-emerald-100/80 hover:border-emerald-300 hover:shadow-lg active:scale-[0.99] transition-all ${
-              currentRole === 'manager' ? 'cursor-pointer' : ''
-            } group flex flex-col justify-between`}
+            onClick={() => setIsCashInHandModalOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                setIsCashInHandModalOpen(true);
+              }
+            }}
+            className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-emerald-100/80 hover:border-emerald-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
           >
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -289,21 +283,15 @@ export const DashboardScreen: React.FC = () => {
 
           {/* CARD 2: Out Flow */}
           <div
-            {...(currentRole === 'manager'
-              ? {
-                  onClick: () => setIsOutFlowModalOpen(true),
-                  role: 'button',
-                  tabIndex: 0,
-                  onKeyDown: (e: React.KeyboardEvent) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      setIsOutFlowModalOpen(true);
-                    }
-                  },
-                }
-              : {})}
-            className={`bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-rose-100/80 hover:border-rose-300 hover:shadow-lg active:scale-[0.99] transition-all ${
-              currentRole === 'manager' ? 'cursor-pointer' : ''
-            } group flex flex-col justify-between`}
+            onClick={() => setIsOutFlowModalOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                setIsOutFlowModalOpen(true);
+              }
+            }}
+            className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-rose-100/80 hover:border-rose-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
           >
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -657,19 +645,15 @@ export const DashboardScreen: React.FC = () => {
         onClose={() => setSelectedBorrowerId(null)}
       />
 
-      {/* Cash In Hand Modal (Manager only) */}
-      {currentRole === 'manager' && (
-        <>
-          <CashInHandModal
-            isOpen={isCashInHandModalOpen}
-            onClose={() => setIsCashInHandModalOpen(false)}
-          />
-          <OutFlowModal
-            isOpen={isOutFlowModalOpen}
-            onClose={() => setIsOutFlowModalOpen(false)}
-          />
-        </>
-      )}
+      {/* Cash In Hand & Out Flow Modals (Manager & Agent) */}
+      <CashInHandModal
+        isOpen={isCashInHandModalOpen}
+        onClose={() => setIsCashInHandModalOpen(false)}
+      />
+      <OutFlowModal
+        isOpen={isOutFlowModalOpen}
+        onClose={() => setIsOutFlowModalOpen(false)}
+      />
     </div>
   );
 };
