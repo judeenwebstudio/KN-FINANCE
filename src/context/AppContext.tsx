@@ -118,7 +118,7 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
   const agentComm = Number(row.agent_commission) || 0;
   const netAmt = row.net_amount_given !== null && row.net_amount_given !== undefined
     ? Number(row.net_amount_given)
-    : Math.max(0, loanAmt - deductedAmt);
+    : Math.max(0, loanAmt - deductedAmt - agentComm);
   const expectedRet = Number(row.expected_return) || loanAmt;
   const borrowerName = row.name || row.borrower_name || 'Borrower';
   const phoneVal = row.phone || row.mobile || '';
@@ -300,7 +300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loanAmount: item.loanAmount || item.amount || 0,
         deductedAmount: item.deductedAmount || 0,
         agentCommission: item.agentCommission || 0,
-        netAmountGiven: item.netAmountGiven ?? Math.max(0, (item.loanAmount || item.amount || 0) - (item.deductedAmount || 0)),
+        netAmountGiven: item.netAmountGiven ?? Math.max(0, (item.loanAmount || item.amount || 0) - (item.deductedAmount || 0) - (item.agentCommission || 0)),
         expectedReturn: item.expectedReturn || item.amount || 0,
         interestRate: item.interestRate || 0,
         repaymentDuration: item.repaymentDuration || '50 Days',
@@ -1284,6 +1284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: Date.now().toString(),
       bookNo: parsedBookNo,
       ...data,
+      netAmountGiven: data.netAmountGiven !== undefined ? data.netAmountGiven : Math.max(0, (Number(data.loanAmount) || 0) - (Number(data.deductedAmount) || 0) - (Number(data.agentCommission) || 0)),
       weeklyCollectionDay: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
       monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
       collectionLine: data.collectionLine ? data.collectionLine.trim() : null,
