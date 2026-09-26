@@ -118,7 +118,7 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
   const agentComm = Number(row.agent_commission) || 0;
   const netAmt = row.net_amount_given !== null && row.net_amount_given !== undefined
     ? Number(row.net_amount_given)
-    : Math.max(0, loanAmt - deductedAmt - agentComm);
+    : Math.max(0, loanAmt - deductedAmt);
   const expectedRet = Number(row.expected_return) || loanAmt;
   const borrowerName = row.name || row.borrower_name || 'Borrower';
   const phoneVal = row.phone || row.mobile || '';
@@ -300,7 +300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loanAmount: item.loanAmount || item.amount || 0,
         deductedAmount: item.deductedAmount || 0,
         agentCommission: item.agentCommission || 0,
-        netAmountGiven: item.netAmountGiven ?? Math.max(0, (item.loanAmount || item.amount || 0) - (item.deductedAmount || 0) - (item.agentCommission || 0)),
+        netAmountGiven: item.netAmountGiven ?? Math.max(0, (item.loanAmount || item.amount || 0) - (item.deductedAmount || 0)),
         expectedReturn: item.expectedReturn || item.amount || 0,
         interestRate: item.interestRate || 0,
         repaymentDuration: item.repaymentDuration || '50 Days',
@@ -1299,7 +1299,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBorrowers(prev => [newBorrower, ...prev]);
 
-    const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0) - (newBorrower.agentCommission || 0));
+    const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0));
     if (netDisbursed > 0) {
       const ledgerEntry: CashLedgerEntry = {
         id: `cash_loan_${newBorrower.id}_${Date.now()}`,

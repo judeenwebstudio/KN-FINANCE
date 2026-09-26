@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Wallet,
   TrendingDown,
+  BadgePercent,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { type DashboardLineFilter } from '../types';
@@ -108,6 +109,27 @@ export const DashboardScreen: React.FC = () => {
   const dueTodayCount = getTodayDueCount();
   const cashInHand = getCashInHand();
   const outFlow = getTotalOutFlow();
+
+  // Agent Commission calculation:
+  // - Manager: Sums agent commission across all company borrowers assigned to an agent (active + closed)
+  // - Agent: Sums agent commission only for borrowers assigned to currentUser.companyUserId (active + closed)
+  const agentCommissionTotal = useMemo(() => {
+    if (currentRole === 'agent') {
+      const agentUserId = currentUser?.companyUserId;
+      const agentName = currentUser?.fullName?.toLowerCase();
+      return roleScopedBorrowers
+        .filter((b) =>
+          (agentUserId && b.agentId === agentUserId) ||
+          (!b.agentId && b.assignedAgent && agentName && b.assignedAgent.toLowerCase() === agentName)
+        )
+        .reduce((sum, b) => sum + (b.agentCommission || 0), 0);
+    }
+
+    // Manager scope: all borrowers assigned to an agent
+    return borrowers
+      .filter((b) => Boolean(b.agentId || (b.assignedAgent && b.assignedAgent.trim() !== '')))
+      .reduce((sum, b) => sum + (b.agentCommission || 0), 0);
+  }, [borrowers, roleScopedBorrowers, currentRole, currentUser]);
 
   const todayIso = getTodayIsoDate();
 
@@ -221,9 +243,9 @@ export const DashboardScreen: React.FC = () => {
 
       {/* Main Content Area - Responsive Container max-width 1200px - 1400px */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        {/* TOP ROW — PRIMARY FINANCIAL CARDS (Manager Only, 2-column prominent desktop layout) */}
+        {/* TOP ROW — PRIMARY FINANCIAL CARDS (Manager Only, 3-column prominent desktop layout) */}
         {currentRole === 'manager' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {/* CARD 1: Cash in Hand (Clickable to open Cash in Hand Modal) */}
             <div
               onClick={() => setIsCashInHandModalOpen(true)}
@@ -279,11 +301,29 @@ export const DashboardScreen: React.FC = () => {
                 ₹{outFlow.toLocaleString('en-IN')}
               </div>
             </div>
+
+            {/* CARD 3: Agent Commission (Manager View: Total company-wide agent commissions) */}
+            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-indigo-100/80 hover:border-indigo-300 hover:shadow-lg transition-all flex flex-col justify-between group">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-[#4f46e5] group-hover:text-[#4338ca] transition-colors">
+                    Agent Commission
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Total Company Agent Commissions</p>
+                </div>
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-50 text-[#4f46e5] flex items-center justify-center shrink-0 group-hover:bg-[#4f46e5] group-hover:text-white transition-all shadow-sm">
+                  <BadgePercent size={22} />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
+                ₹{agentCommissionTotal.toLocaleString('en-IN')}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* SECOND ROW — OPERATIONAL CARDS (4-column layout on desktop, 2x2 on mobile/tablet) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-5">
+        {/* SECOND ROW — OPERATIONAL / AGENT SUMMARY CARDS */}
+        <div className={`grid gap-3.5 sm:gap-5 ${currentRole === 'agent' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'}`}>
           {/* CARD 1: Active Borrowers (Clickable to open Active Borrowers Modal) */}
           <div
             onClick={() => setIsActiveBorrowersModalOpen(true)}
@@ -383,6 +423,23 @@ export const DashboardScreen: React.FC = () => {
               {dueTodayCount}
             </div>
           </div>
+
+          {/* CARD 5: Agent Commission (Agent View Only: Assigned Borrowers Commission) */}
+          {currentRole === 'agent' && (
+            <div className="bg-white rounded-2xl p-4 sm:p-5 lg:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col justify-between hover:border-[#c7d2fe] hover:shadow-md transition-all group col-span-2 sm:col-span-1">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs sm:text-sm font-semibold text-[#64748b] group-hover:text-[#4f46e5] transition-colors">
+                  Agent Commission
+                </span>
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#f3f0ff] flex items-center justify-center text-[#4f46e5] shrink-0 group-hover:bg-[#4f46e5] group-hover:text-white transition-colors">
+                  <BadgePercent size={18} />
+                </div>
+              </div>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#1e293b]">
+                ₹{agentCommissionTotal.toLocaleString('en-IN')}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Dashboard Control Card - Full-width desktop responsive bar */}

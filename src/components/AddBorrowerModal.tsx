@@ -218,14 +218,13 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return Number.isInteger(rate) ? `${rate}%` : `${rate.toFixed(2)}%`;
   }, [loanAmount, expectedReturn]);
 
-  // Net Amount Given calculation: Loan Amount - Deducted Amount - Agent Commission
+  // Net Amount Given calculation: Loan Amount - Deducted Amount
   const calculatedNetAmountGiven = useMemo(() => {
     const loan = parseFloat(loanAmount) || 0;
     const deducted = parseFloat(deductedAmount) || 0;
-    const commission = parseFloat(agentCommission) || 0;
-    const net = Math.max(0, loan - deducted - commission);
+    const net = Math.max(0, loan - deducted);
     return net;
-  }, [loanAmount, deductedAmount, agentCommission]);
+  }, [loanAmount, deductedAmount]);
 
   // End Date calculation
   const calculatedEndDate = useMemo(() => {
@@ -292,10 +291,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     const commissionVal = parseFloat(agentCommission || '0');
     if (isNaN(commissionVal) || commissionVal < 0) {
       newErrors.agentCommission = 'Agent Commission cannot be negative';
-    } else if (!isNaN(loanVal) && commissionVal > loanVal) {
-      newErrors.agentCommission = 'Agent Commission cannot exceed loan amount';
-    } else if (!isNaN(loanVal) && !isNaN(deductedVal) && (deductedVal + commissionVal) > loanVal) {
-      newErrors.agentCommission = 'Total deductions (Deducted + Commission) cannot exceed loan amount';
     }
 
     const expReturnVal = parseFloat(expectedReturn);

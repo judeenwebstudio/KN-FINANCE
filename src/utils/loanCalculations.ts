@@ -395,7 +395,7 @@ export function getBorrowerLoanSummary(
     totalPaid,
     totalPending,
     expectedReturn: expReturn,
-    netAmountGiven: borrower.netAmountGiven ?? Math.max(0, (borrower.loanAmount || 0) - (borrower.deductedAmount || 0) - (borrower.agentCommission || 0)),
+    netAmountGiven: borrower.netAmountGiven ?? Math.max(0, (borrower.loanAmount || 0) - (borrower.deductedAmount || 0)),
     todayDue,
     overdueCount,
     overdueAmount,
@@ -629,13 +629,13 @@ export function calculateFinancialAnalytics(
 
   // Net Amount Given for loans disbursed in period
   const netAmountGivenInPeriod = disbursedInPeriod.reduce((sum, b) => {
-    const net = b.netAmountGiven ?? Math.max(0, (b.loanAmount || 0) - (b.deductedAmount || 0) - (b.agentCommission || 0));
+    const net = b.netAmountGiven ?? Math.max(0, (b.loanAmount || 0) - (b.deductedAmount || 0));
     return sum + net;
   }, 0);
 
   // All-time invested for this finance type
   const totalInvestedAllTime = periodBorrowers.reduce((sum, b) => {
-    const net = b.netAmountGiven ?? Math.max(0, (b.loanAmount || 0) - (b.deductedAmount || 0) - (b.agentCommission || 0));
+    const net = b.netAmountGiven ?? Math.max(0, (b.loanAmount || 0) - (b.deductedAmount || 0));
     return sum + net;
   }, 0);
 
@@ -682,7 +682,7 @@ export function calculateFinancialAnalytics(
         return sDate ? toIsoDate(sDate) === dayIso : false;
       })
       .reduce((sum, b) => {
-        const net = b.netAmountGiven ?? Math.max(0, (b.loanAmount || 0) - (b.deductedAmount || 0) - (b.agentCommission || 0));
+        const net = b.netAmountGiven ?? Math.max(0, (b.loanAmount || 0) - (b.deductedAmount || 0));
         return sum + net;
       }, 0);
 
