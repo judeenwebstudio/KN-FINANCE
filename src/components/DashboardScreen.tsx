@@ -542,12 +542,22 @@ export const DashboardScreen: React.FC = () => {
                     return (
                       <tr
                         key={borrower.id}
-                        className="hover:bg-slate-50/60 transition-colors"
+                        onClick={() => setSelectedBorrowerId(borrower.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedBorrowerId(borrower.id);
+                          }
+                        }}
+                        className="hover:bg-indigo-50/40 cursor-pointer transition-colors group focus:outline-none focus:bg-indigo-50/60"
+                        title="Click to view borrower details"
                       >
                         <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium">
                           {borrower.bookNo !== null && borrower.bookNo !== undefined ? borrower.bookNo : '—'}
                         </td>
-                        <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b]">
+                        <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b] group-hover:text-[#4f46e5] transition-colors">
                           {borrower.borrowerName || borrower.name}
                         </td>
                         <td className="py-3.5 px-4 sm:px-6 text-[#475569]">
@@ -582,7 +592,15 @@ export const DashboardScreen: React.FC = () => {
                         <td className="py-3.5 px-4 sm:px-6 text-right">
                           <button
                             type="button"
-                            onClick={() => setIsActiveBorrowersModalOpen(true)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsActiveBorrowersModalOpen(true);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.stopPropagation();
+                              }
+                            }}
                             className="inline-flex items-center justify-end font-bold text-[#4f46e5] hover:text-[#4338ca] hover:underline focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/40 rounded px-1.5 py-0.5 -mr-1.5 transition-colors cursor-pointer"
                             title="Click to view all Active Borrowers"
                             aria-label={`Pending amount ₹${pending.toLocaleString('en-IN')}, click to view active borrowers`}
