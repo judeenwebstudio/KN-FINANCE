@@ -133,6 +133,14 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
           amountColor: 'text-amber-600',
           icon: <ArrowUpRight size={14} className="text-amber-600 shrink-0" />,
         };
+      case 'AGENT_COMMISSION':
+        return {
+          label: 'Agent Commission',
+          color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+          sign: '-',
+          amountColor: 'text-indigo-600',
+          icon: <ArrowUpRight size={14} className="text-indigo-600 shrink-0" />,
+        };
       default:
         return {
           label: type,

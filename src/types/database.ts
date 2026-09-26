@@ -299,9 +299,9 @@ export interface DbCompanySettingsUpdate {
 export interface DbCompanyCashLedger {
   id: string;
   company_id: string;
-  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED';
+  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED' | 'AGENT_COMMISSION';
   amount: number;
-  source_type: 'MANUAL' | 'LOAN' | 'PAYMENT';
+  source_type: 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION';
   borrower_id: string | null;
   payment_id: string | null;
   note: string | null;
@@ -312,9 +312,9 @@ export interface DbCompanyCashLedger {
 export interface DbCompanyCashLedgerInsert {
   id?: string;
   company_id: string;
-  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED';
+  transaction_type: 'CASH_ADDED' | 'CASH_DECREASED' | 'LOAN_DISBURSED' | 'PAYMENT_COLLECTED' | 'AGENT_COMMISSION';
   amount: number;
-  source_type?: 'MANUAL' | 'LOAN' | 'PAYMENT';
+  source_type?: 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION';
   borrower_id?: string | null;
   payment_id?: string | null;
   note?: string | null;

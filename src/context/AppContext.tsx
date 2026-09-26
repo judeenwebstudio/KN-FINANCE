@@ -1300,6 +1300,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBorrowers(prev => [newBorrower, ...prev]);
 
     const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0));
+    const commissionAmt = newBorrower.agentCommission || 0;
+
     if (netDisbursed > 0) {
       const ledgerEntry: CashLedgerEntry = {
         id: `cash_loan_${newBorrower.id}_${Date.now()}`,
@@ -1319,6 +1321,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return prev;
         }
         return [ledgerEntry, ...prev];
+      });
+    }
+
+    if (commissionAmt > 0) {
+      const commEntry: CashLedgerEntry = {
+        id: `cash_comm_${newBorrower.id}_${Date.now()}`,
+        companyId: currentUser?.companyId,
+        transactionType: 'AGENT_COMMISSION',
+        amount: commissionAmt,
+        sourceType: 'COMMISSION',
+        borrowerId: newBorrower.id,
+        borrowerName: newBorrower.borrowerName,
+        note: `Agent commission for ${newBorrower.borrowerName}`,
+        performedByUserId: currentUser?.companyUserId || null,
+        performedByName: currentUser?.fullName || (currentRole === 'agent' ? 'Agent' : 'Manager'),
+        createdAt: now,
+      };
+      setCashLedger(prev => {
+        if (prev.some(e => e.transactionType === 'AGENT_COMMISSION' && e.borrowerId === newBorrower.id)) {
+          return prev;
+        }
+        return [commEntry, ...prev];
       });
     }
 
@@ -1608,14 +1632,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED')
       .reduce((sum, e) => sum + e.amount, 0);
     const outflows = cashLedger
-      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
+      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED' || e.transactionType === 'AGENT_COMMISSION')
       .reduce((sum, e) => sum + e.amount, 0);
     return inflows - outflows;
   };
 
   const getTotalOutFlow = (): number => {
     return cashLedger
-      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
+      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED' || e.transactionType === 'AGENT_COMMISSION')
       .reduce((sum, e) => sum + e.amount, 0);
   };
 
