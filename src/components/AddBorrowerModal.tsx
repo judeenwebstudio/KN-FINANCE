@@ -3,7 +3,7 @@ import { X, Phone, Upload, Trash2, Plus, AlertCircle, FileText, Image as ImageIc
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
-import { calculateBorrowerEndDate } from '../utils/loanCalculations';
+import { calculateBorrowerEndDate, parseCustomDate } from '../utils/loanCalculations';
 import { COLLECTION_METHODS } from '../types';
 import type { Timeframe, Borrower, NewBorrowerInput, CollectionMethod } from '../types';
 
@@ -128,8 +128,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setAlternatePhoneNumber(initialBorrower.alternatePhoneNumber || '');
         setAddress(initialBorrower.address || '');
         setFinanceType(initialBorrower.financeType || 'Daily');
-        setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || 1);
-        setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || 1);
+        const parsedStart = parseCustomDate(initialBorrower.startDate);
+        const startDay1to7 = parsedStart ? (parsedStart.getDay() === 0 ? 7 : parsedStart.getDay()) : 1;
+        setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || startDay1to7);
+        setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || (parsedStart ? parsedStart.getDate() : 1));
         setCollectionLine(initialBorrower.collectionLine || activeLines[0]?.name || '');
         setCollectionMethod((initialBorrower.collectionMethod as CollectionMethod) || 'Hand Cash');
         const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
@@ -149,19 +151,22 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setIsExistingLoan(Boolean(initialBorrower.isExistingLoan));
       } else {
         const initialType = settings?.defaultFinanceType || timeframe || 'Daily';
+        const todayIso = getTodayIsoDate();
+        const todayD = new Date();
+        const todayDay1to7 = todayD.getDay() === 0 ? 7 : todayD.getDay();
         setBookNo('');
         setBorrowerName('');
         setPhoneNumber('');
         setAlternatePhoneNumber('');
         setAddress('');
         setFinanceType(initialType);
-        setWeeklyCollectionDay(1);
-        setMonthlyCollectionDay(1);
+        setWeeklyCollectionDay(todayDay1to7);
+        setMonthlyCollectionDay(todayD.getDate());
         setCollectionLine(activeLines[0]?.name || '');
         setCollectionMethod('Hand Cash');
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
-        setStartDateIso(getTodayIsoDate());
+        setStartDateIso(todayIso);
         const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
           ? currentUser.companyUserId
           : '';
@@ -187,6 +192,13 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     const options = DURATION_OPTIONS[newType];
     if (!options.includes(repaymentDuration)) {
       setRepaymentDuration(options[1] || options[0]);
+    }
+    if (newType === 'Weekly' && !initialBorrower) {
+      const parsed = parseCustomDate(startDateIso);
+      if (parsed) {
+        const jsDay = parsed.getDay();
+        setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
+      }
     }
   };
 
@@ -949,7 +961,18 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <input
                   type="date"
                   value={startDateIso}
-                  onChange={(e) => setStartDateIso(e.target.value)}
+                  onChange={(e) => {
+                    const newIso = e.target.value;
+                    setStartDateIso(newIso);
+                    if (!initialBorrower && newIso) {
+                      const parsed = parseCustomDate(newIso);
+                      if (parsed) {
+                        const jsDay = parsed.getDay();
+                        setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
+                        setMonthlyCollectionDay(parsed.getDate());
+                      }
+                    }
+                  }}
                   className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                 />
                 <p className="text-[11px] text-[#64748b] mt-1 font-medium">
