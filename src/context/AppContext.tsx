@@ -1300,7 +1300,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBorrowers(prev => [newBorrower, ...prev]);
 
     const loanDisbursedAmt = newBorrower.loanAmount || newBorrower.amount || 0;
-    const commissionAmt = newBorrower.agentCommission || 0;
 
     if (loanDisbursedAmt > 0) {
       const ledgerEntry: CashLedgerEntry = {
@@ -1321,28 +1320,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return prev;
         }
         return [ledgerEntry, ...prev];
-      });
-    }
-
-    if (commissionAmt > 0) {
-      const commEntry: CashLedgerEntry = {
-        id: `cash_comm_${newBorrower.id}_${Date.now()}`,
-        companyId: currentUser?.companyId,
-        transactionType: 'AGENT_COMMISSION',
-        amount: commissionAmt,
-        sourceType: 'COMMISSION',
-        borrowerId: newBorrower.id,
-        borrowerName: newBorrower.borrowerName,
-        note: `Agent commission for ${newBorrower.borrowerName}`,
-        performedByUserId: currentUser?.companyUserId || null,
-        performedByName: currentUser?.fullName || (currentRole === 'agent' ? 'Agent' : 'Manager'),
-        createdAt: now,
-      };
-      setCashLedger(prev => {
-        if (prev.some(e => e.transactionType === 'AGENT_COMMISSION' && e.borrowerId === newBorrower.id)) {
-          return prev;
-        }
-        return [commEntry, ...prev];
       });
     }
 
@@ -1632,7 +1609,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED')
       .reduce((sum, e) => sum + e.amount, 0);
     const outflows = cashLedger
-      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED' || e.transactionType === 'AGENT_COMMISSION')
+      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
       .reduce((sum, e) => sum + e.amount, 0);
     return inflows - outflows;
   };

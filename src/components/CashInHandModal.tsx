@@ -94,10 +94,12 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
     }, 1200);
   };
 
-  const filteredHistory = cashLedger.filter((entry) => {
-    if (filterType === 'ALL') return true;
-    return entry.transactionType === filterType;
-  });
+  const filteredHistory = cashLedger
+    .filter((entry) => entry.transactionType !== 'AGENT_COMMISSION')
+    .filter((entry) => {
+      if (filterType === 'ALL') return true;
+      return entry.transactionType === filterType;
+    });
 
   const getBadgeForType = (type: CashTransactionType) => {
     switch (type) {
@@ -132,14 +134,6 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
           sign: '-',
           amountColor: 'text-amber-600',
           icon: <ArrowUpRight size={14} className="text-amber-600 shrink-0" />,
-        };
-      case 'AGENT_COMMISSION':
-        return {
-          label: 'Agent Commission',
-          color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-          sign: '-',
-          amountColor: 'text-indigo-600',
-          icon: <ArrowUpRight size={14} className="text-indigo-600 shrink-0" />,
         };
       default:
         return {
