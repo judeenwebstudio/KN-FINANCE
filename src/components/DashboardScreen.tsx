@@ -578,8 +578,16 @@ export const DashboardScreen: React.FC = () => {
                         <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium whitespace-nowrap">
                           {formattedDueDate}
                         </td>
-                        <td className="py-3.5 px-4 sm:px-6 text-right font-bold text-[#4f46e5]">
-                          ₹{pending.toLocaleString('en-IN')}
+                        <td className="py-3.5 px-4 sm:px-6 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setIsActiveBorrowersModalOpen(true)}
+                            className="inline-flex items-center justify-end font-bold text-[#4f46e5] hover:text-[#4338ca] hover:underline focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/40 rounded px-1.5 py-0.5 -mr-1.5 transition-colors cursor-pointer"
+                            title="Click to view all Active Borrowers"
+                            aria-label={`Pending amount ₹${pending.toLocaleString('en-IN')}, click to view active borrowers`}
+                          >
+                            ₹{pending.toLocaleString('en-IN')}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -602,6 +610,7 @@ export const DashboardScreen: React.FC = () => {
         isOpen={isActiveBorrowersModalOpen}
         onClose={() => setIsActiveBorrowersModalOpen(false)}
         onSelectBorrower={(borrowerId) => setSelectedBorrowerId(borrowerId)}
+        selectedLine={selectedLine}
       />
 
       {/* Collections Modal */}

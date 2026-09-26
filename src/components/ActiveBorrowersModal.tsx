@@ -8,12 +8,14 @@ interface ActiveBorrowersModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectBorrower?: (borrowerId: string) => void;
+  selectedLine?: string;
 }
 
 export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
   isOpen,
   onClose,
   onSelectBorrower,
+  selectedLine,
 }) => {
   const {
     borrowers,
@@ -40,13 +42,26 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         )
       : borrowers;
 
-  // Filter all active borrowers for current role scope
-  const activeBorrowers = roleScopedBorrowers.filter(
-    (b) => b.status === 'active'
-  );
+  // Filter all active borrowers for current role scope & selected line filter
+  const activeBorrowers = roleScopedBorrowers.filter((b) => {
+    if (b.status !== 'active') return false;
+
+    // Line filter ('All Lines' shows all; specific line requires trimmed case-insensitive match)
+    if (selectedLine && selectedLine !== 'All Lines') {
+      const bLine = b.collectionLine ? b.collectionLine.trim().toLowerCase() : '';
+      const sLine = selectedLine.trim().toLowerCase();
+      if (!bLine || bLine !== sLine) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   const borrowerCount = activeBorrowers.length;
-  const countLabel = `${borrowerCount} ${borrowerCount === 1 ? 'borrower' : 'borrowers'}`;
+  const countLabel = `${borrowerCount} ${borrowerCount === 1 ? 'borrower' : 'borrowers'}${
+    selectedLine && selectedLine !== 'All Lines' ? ` • ${selectedLine}` : ''
+  }`;
 
   // Helper row calculations using shared payment helpers
   const getBorrowerRowData = (b: Borrower) => {
