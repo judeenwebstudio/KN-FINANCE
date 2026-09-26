@@ -89,17 +89,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return set;
   }, [borrowers, initialBorrower]);
 
-  // Available Book Numbers from 1 to 1000
-  const availableBookNos = useMemo(() => {
-    const list: number[] = [];
-    for (let i = 1; i <= 1000; i++) {
-      if (!usedBookNos.has(i)) {
-        list.push(i);
-      }
-    }
-    return list;
-  }, [usedBookNos]);
-
   // Active agents available for assignment
   const activeAgents = useMemo(() => agents.filter((a) => a.status === 'active'), [agents]);
 
@@ -539,23 +528,16 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Book No <span className="text-red-500">*</span>
                 </label>
-                <select
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="1"
                   value={bookNo}
                   onChange={(e) => setBookNo(e.target.value)}
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all cursor-pointer"
-                >
-                  <option value="">Select Book No (1 - 1000)</option>
-                  {availableBookNos.map((num) => (
-                    <option key={num} value={num}>
-                      {num}
-                    </option>
-                  ))}
-                  {initialBorrower?.bookNo && !availableBookNos.includes(initialBorrower.bookNo) && (
-                    <option value={initialBorrower.bookNo}>
-                      {initialBorrower.bookNo} (Current)
-                    </option>
-                  )}
-                </select>
+                  placeholder="Enter Book No (e.g. 1)"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                />
                 {errors.bookNo && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.bookNo}</p>
                 )}
