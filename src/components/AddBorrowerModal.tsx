@@ -36,7 +36,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   initialBorrower,
   onUpdate,
 }) => {
-  const { addBorrower, timeframe, borrowers, agents, settings, collectionLines, currentUser, isCloudAuth } = useApp();
+  const { addBorrower, timeframe, borrowers, agents, settings, collectionLines, currentUser, currentRole, isCloudAuth } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active collection lines for borrower assignment
@@ -132,11 +132,14 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || 1);
         setCollectionLine(initialBorrower.collectionLine || activeLines[0]?.name || '');
         setCollectionMethod((initialBorrower.collectionMethod as CollectionMethod) || 'Hand Cash');
-        setSelectedAgentId(initialBorrower.agentId || '');
+        const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
+          ? currentUser.companyUserId
+          : (initialBorrower.agentId || '');
+        setSelectedAgentId(targetAgentId);
         setAgentCommission(
           initialBorrower.agentCommission !== undefined
             ? initialBorrower.agentCommission.toString()
-            : (initialBorrower.agentId ? '500' : '0')
+            : (targetAgentId ? '500' : '0')
         );
         setParcelTokenMode(Boolean(initialBorrower.parcelTokenMode));
         setLoanAmount((initialBorrower.loanAmount || initialBorrower.amount || '').toString());
@@ -159,7 +162,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
         setStartDateIso(getTodayIsoDate());
-        setSelectedAgentId('');
+        const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
+          ? currentUser.companyUserId
+          : '';
+        setSelectedAgentId(targetAgentId);
         setAgentCommission('0');
         setLoanAmount('');
         setDeductedAmount('');
@@ -395,6 +401,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     const expReturnVal = parseFloat(expectedReturn);
     const interestVal = parseFloat(calculatedInterestRate?.replace('%', '') || '0');
 
+    const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
+      ? currentUser.companyUserId
+      : (selectedAgentId ? selectedAgentId : null);
+
     const payload: NewBorrowerInput = {
       bookNo: isNaN(numBookNo) ? null : numBookNo,
       borrowerName: borrowerName.trim(),
@@ -406,7 +416,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
       collectionLine: collectionLine ? collectionLine.trim() : null,
       collectionMethod: collectionMethod ? collectionMethod.trim() : 'Hand Cash',
-      agentId: selectedAgentId ? selectedAgentId : null,
+      agentId: targetAgentId,
       agentCommission: commissionVal,
       parcelTokenMode,
       loanAmount: loanVal,
@@ -699,34 +709,43 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Assign to Agent
                 </label>
-                <select
-                  value={selectedAgentId}
-                  onChange={(e) => handleAgentChange(e.target.value)}
-                  disabled={activeAgents.length === 0 && !inactiveAssignedAgent}
-                  className={`w-full h-11 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4f46e5] transition-all ${
-                    activeAgents.length === 0 && !inactiveAssignedAgent
-                      ? 'bg-slate-50/70 text-slate-400 cursor-not-allowed'
-                      : 'bg-white text-[#1e293b] cursor-pointer'
-                  }`}
-                >
-                  {activeAgents.length === 0 && !inactiveAssignedAgent ? (
-                    <option value="">No Agents Available</option>
-                  ) : (
-                    <>
-                      <option value="">Select an Agent (Optional)</option>
-                      {inactiveAssignedAgent && (
-                        <option value={inactiveAssignedAgent.id}>
-                          {inactiveAssignedAgent.fullName} (Inactive)
-                        </option>
-                      )}
-                      {activeAgents.map((agent) => (
-                        <option key={agent.id} value={agent.id}>
-                          {agent.fullName}
-                        </option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                {currentRole === 'agent' ? (
+                  <div className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-medium flex items-center justify-between select-none">
+                    <span className="truncate">{currentUser?.fullName || 'Assigned to You'}</span>
+                    <span className="text-[11px] font-semibold bg-indigo-50 text-[#4f46e5] px-2 py-0.5 rounded-md shrink-0 ml-2">
+                      You
+                    </span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedAgentId}
+                    onChange={(e) => handleAgentChange(e.target.value)}
+                    disabled={activeAgents.length === 0 && !inactiveAssignedAgent}
+                    className={`w-full h-11 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4f46e5] transition-all ${
+                      activeAgents.length === 0 && !inactiveAssignedAgent
+                        ? 'bg-slate-50/70 text-slate-400 cursor-not-allowed'
+                        : 'bg-white text-[#1e293b] cursor-pointer'
+                    }`}
+                  >
+                    {activeAgents.length === 0 && !inactiveAssignedAgent ? (
+                      <option value="">No Agents Available</option>
+                    ) : (
+                      <>
+                        <option value="">Select an Agent (Optional)</option>
+                        {inactiveAssignedAgent && (
+                          <option value={inactiveAssignedAgent.id}>
+                            {inactiveAssignedAgent.fullName} (Inactive)
+                          </option>
+                        )}
+                        {activeAgents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.fullName}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                )}
               </div>
 
               {/* Line Dropdown */}

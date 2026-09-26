@@ -432,15 +432,13 @@ export const DashboardScreen: React.FC = () => {
               </button>
             </div>
 
-            {currentRole === 'manager' && (
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(true)}
-                className="h-10 px-4 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-              >
-                + Add Borrower
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="h-10 px-4 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+            >
+              + Add Borrower
+            </button>
           </div>
         </div>
 

@@ -1203,6 +1203,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addBorrower = async (data: NewBorrowerInput): Promise<{ success: boolean; error?: string; borrowerId?: string }> => {
     const parsedBookNo = data.bookNo !== undefined && data.bookNo !== null ? Number(data.bookNo) : null;
+    const assignedAgentId = (isCloudAuth && currentUser?.role === 'agent')
+      ? currentUser.companyUserId
+      : (data.agentId || null);
 
     if (isCloudAuth && currentUser && supabase) {
       try {
@@ -1223,7 +1226,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             monthly_collection_day: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
             collection_line: data.collectionLine ? data.collectionLine.trim() : null,
             collection_method: data.collectionMethod ? data.collectionMethod.trim() : null,
-            assigned_agent_id: data.agentId || null,
+            assigned_agent_id: assignedAgentId,
             loan_amount: data.loanAmount,
             deducted_amount: data.deductedAmount,
             agent_commission: Number(data.agentCommission) || 0,
@@ -1273,6 +1276,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const now = new Date().toISOString();
+    const resolvedAgentId = (currentRole === 'agent' && currentUser?.companyUserId)
+      ? currentUser.companyUserId
+      : (data.agentId !== undefined ? data.agentId : null);
+
     const newBorrower: Borrower = {
       id: Date.now().toString(),
       bookNo: parsedBookNo,
@@ -1281,7 +1288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
       collectionLine: data.collectionLine ? data.collectionLine.trim() : null,
       collectionMethod: data.collectionMethod ? data.collectionMethod.trim() : null,
-      agentId: data.agentId !== undefined ? data.agentId : null,
+      agentId: resolvedAgentId,
       agentCommission: Number(data.agentCommission) || 0,
       name: data.borrowerName,
       phone: data.phoneNumber,
@@ -1304,7 +1311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         borrowerName: newBorrower.borrowerName,
         note: `Loan disbursed to ${newBorrower.borrowerName}`,
         performedByUserId: currentUser?.companyUserId || null,
-        performedByName: currentUser?.fullName || 'Manager',
+        performedByName: currentUser?.fullName || (currentRole === 'agent' ? 'Agent' : 'Manager'),
         createdAt: now,
       };
       setCashLedger(prev => {
@@ -1317,8 +1324,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     addActivity({
       action: 'borrower_created',
-      performedByUserId: null,
-      performedByRole: 'manager',
+      performedByUserId: currentUser?.companyUserId || null,
+      performedByRole: currentRole,
       borrowerId: newBorrower.id,
       message: `Borrower ${data.borrowerName.trim()} was added.`,
     });
