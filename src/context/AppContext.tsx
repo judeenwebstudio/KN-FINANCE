@@ -1638,9 +1638,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getTotalOutFlow = (): number => {
-    return cashLedger
-      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
+    const loanDisbursed = cashLedger
+      .filter(e => e.transactionType === 'LOAN_DISBURSED')
       .reduce((sum, e) => sum + e.amount, 0);
+    const expenses = cashLedger
+      .filter(e => e.transactionType === 'CASH_DECREASED')
+      .reduce((sum, e) => sum + e.amount, 0);
+    const paymentsCollected = cashLedger
+      .filter(e => e.transactionType === 'PAYMENT_COLLECTED')
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const netLoanOutflow = Math.max(0, loanDisbursed - paymentsCollected);
+    return netLoanOutflow + expenses;
   };
 
   const addManualCash = async (amount: number, note?: string) => {

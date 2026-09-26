@@ -28,8 +28,11 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
 
   const loanDisbursedEntries = outFlowEntries.filter((e) => e.transactionType === 'LOAN_DISBURSED');
   const manualDecreasedEntries = outFlowEntries.filter((e) => e.transactionType === 'CASH_DECREASED');
+  const paymentEntries = cashLedger.filter((e) => e.transactionType === 'PAYMENT_COLLECTED');
 
   const totalLoanDisbursed = loanDisbursedEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const totalPaymentsCollected = paymentEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const netLoanOutflow = Math.max(0, totalLoanDisbursed - totalPaymentsCollected);
   const totalManualDecreased = manualDecreasedEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
 
   const filteredEntries = outFlowEntries.filter((entry) => {
@@ -74,7 +77,7 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
           <div className="flex items-center justify-between">
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-rose-200">
-                Total Outgoing Cash
+                Total Net Outflow
               </span>
               <div className="text-3xl sm:text-4xl font-extrabold text-white mt-0.5 tracking-tight">
                 ₹{totalOutFlow.toLocaleString('en-IN')}
@@ -100,14 +103,19 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
             }`}
           >
             <div className="flex items-center justify-between text-xs font-bold text-slate-600 mb-1">
-              <span>Loan Disbursed</span>
+              <span>Outstanding Loans</span>
               <span className="text-[11px] px-2 py-0.5 rounded-md bg-rose-100 text-rose-700">
                 {loanDisbursedEntries.length}
               </span>
             </div>
             <div className="text-base sm:text-lg font-extrabold text-rose-700">
-              ₹{totalLoanDisbursed.toLocaleString('en-IN')}
+              ₹{netLoanOutflow.toLocaleString('en-IN')}
             </div>
+            {totalPaymentsCollected > 0 && (
+              <p className="text-[10px] text-slate-400 mt-1">
+                ₹{totalLoanDisbursed.toLocaleString('en-IN')} issued • ₹{totalPaymentsCollected.toLocaleString('en-IN')} repaid
+              </p>
+            )}
           </div>
 
           <div
