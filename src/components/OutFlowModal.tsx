@@ -16,23 +16,21 @@ interface OutFlowModalProps {
 export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) => {
   const { cashLedger, getTotalOutFlow, settings } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'ALL' | 'LOAN_DISBURSED' | 'CASH_DECREASED' | 'AGENT_COMMISSION'>('ALL');
+  const [filterType, setFilterType] = useState<'ALL' | 'LOAN_DISBURSED' | 'CASH_DECREASED'>('ALL');
 
   if (!isOpen) return null;
 
   const totalOutFlow = getTotalOutFlow();
 
   const outFlowEntries = cashLedger.filter(
-    (e) => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED' || e.transactionType === 'AGENT_COMMISSION'
+    (e) => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED'
   );
 
   const loanDisbursedEntries = outFlowEntries.filter((e) => e.transactionType === 'LOAN_DISBURSED');
   const manualDecreasedEntries = outFlowEntries.filter((e) => e.transactionType === 'CASH_DECREASED');
-  const commissionEntries = outFlowEntries.filter((e) => e.transactionType === 'AGENT_COMMISSION');
 
   const totalLoanDisbursed = loanDisbursedEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
   const totalManualDecreased = manualDecreasedEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
-  const totalCommission = commissionEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
 
   const filteredEntries = outFlowEntries.filter((entry) => {
     if (filterType !== 'ALL' && entry.transactionType !== filterType) {
@@ -92,7 +90,7 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
         </div>
 
         {/* Breakdown Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50 border-b border-slate-100 shrink-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 border-b border-slate-100 shrink-0">
           <div
             onClick={() => setFilterType(filterType === 'LOAN_DISBURSED' ? 'ALL' : 'LOAN_DISBURSED')}
             className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
@@ -109,25 +107,6 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
             </div>
             <div className="text-base sm:text-lg font-extrabold text-rose-700">
               ₹{totalLoanDisbursed.toLocaleString('en-IN')}
-            </div>
-          </div>
-
-          <div
-            onClick={() => setFilterType(filterType === 'AGENT_COMMISSION' ? 'ALL' : 'AGENT_COMMISSION')}
-            className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-              filterType === 'AGENT_COMMISSION'
-                ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-400/20'
-                : 'bg-white border-slate-200/80 hover:border-slate-300 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between text-xs font-bold text-slate-600 mb-1">
-              <span>Agent Commission</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700">
-                {commissionEntries.length}
-              </span>
-            </div>
-            <div className="text-base sm:text-lg font-extrabold text-indigo-700">
-              ₹{totalCommission.toLocaleString('en-IN')}
             </div>
           </div>
 
@@ -188,17 +167,6 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
             </button>
             <button
               type="button"
-              onClick={() => setFilterType('AGENT_COMMISSION')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                filterType === 'AGENT_COMMISSION'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Commissions ({commissionEntries.length})
-            </button>
-            <button
-              type="button"
               onClick={() => setFilterType('CASH_DECREASED')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 filterType === 'CASH_DECREASED'
@@ -229,7 +197,6 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
                 minute: '2-digit',
               });
               const isLoan = entry.transactionType === 'LOAN_DISBURSED';
-              const isCommission = entry.transactionType === 'AGENT_COMMISSION';
 
               return (
                 <div
@@ -241,8 +208,6 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
                       className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                         isLoan
                           ? 'bg-rose-50 text-rose-600'
-                          : isCommission
-                          ? 'bg-indigo-50 text-indigo-600'
                           : 'bg-amber-50 text-amber-600'
                       }`}
                     >
@@ -257,12 +222,10 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
                             isLoan
                               ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                              : isCommission
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                               : 'bg-amber-50 text-amber-700 border border-amber-200'
                           }`}
                         >
-                          {isLoan ? 'Loan Disbursed' : isCommission ? 'Agent Commission' : 'Expense / Decrease'}
+                          {isLoan ? 'Loan Disbursed' : 'Expense / Decrease'}
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
@@ -274,7 +237,7 @@ export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) =
                   <div className="text-right shrink-0">
                     <span
                       className={`text-sm sm:text-base font-extrabold ${
-                        isLoan ? 'text-rose-600' : isCommission ? 'text-indigo-600' : 'text-amber-600'
+                        isLoan ? 'text-rose-600' : 'text-amber-600'
                       }`}
                     >
                       -₹{(entry.amount || 0).toLocaleString('en-IN')}

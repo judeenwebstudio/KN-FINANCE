@@ -1299,15 +1299,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBorrowers(prev => [newBorrower, ...prev]);
 
-    const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0));
+    const loanDisbursedAmt = newBorrower.loanAmount || newBorrower.amount || 0;
     const commissionAmt = newBorrower.agentCommission || 0;
 
-    if (netDisbursed > 0) {
+    if (loanDisbursedAmt > 0) {
       const ledgerEntry: CashLedgerEntry = {
         id: `cash_loan_${newBorrower.id}_${Date.now()}`,
         companyId: currentUser?.companyId,
         transactionType: 'LOAN_DISBURSED',
-        amount: netDisbursed,
+        amount: loanDisbursedAmt,
         sourceType: 'LOAN',
         borrowerId: newBorrower.id,
         borrowerName: newBorrower.borrowerName,
@@ -1639,7 +1639,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const getTotalOutFlow = (): number => {
     return cashLedger
-      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED' || e.transactionType === 'AGENT_COMMISSION')
+      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
       .reduce((sum, e) => sum + e.amount, 0);
   };
 
