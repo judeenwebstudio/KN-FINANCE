@@ -134,12 +134,17 @@ export const DashboardScreen: React.FC = () => {
       if (b.status !== 'closed') return false;
     }
 
-    // 3. Search query (name or phone)
+    // 3. Search query (name, phone, or book no)
     const query = searchQuery.trim().toLowerCase();
     if (query !== '') {
       const nameStr = (b.borrowerName || b.name || '').toLowerCase();
       const phoneStr = (b.phoneNumber || b.phone || '');
-      const matchesSearch = nameStr.includes(query) || phoneStr.includes(query);
+      const bookNoStr = b.bookNo !== null && b.bookNo !== undefined ? String(b.bookNo) : '';
+      const matchesSearch =
+        nameStr.includes(query) ||
+        phoneStr.includes(query) ||
+        bookNoStr === query ||
+        bookNoStr.includes(query);
       if (!matchesSearch) return false;
     }
 
@@ -395,7 +400,7 @@ export const DashboardScreen: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name or phone..."
+              placeholder="Search by name, phone, or Book No..."
               className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50/60 text-xs sm:text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:bg-white transition-all"
             />
           </div>
@@ -445,6 +450,7 @@ export const DashboardScreen: React.FC = () => {
             <table className="w-full text-left border-collapse min-w-[760px]">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] sm:text-xs font-bold text-[#475569] tracking-wider uppercase">
+                  <th className="py-3.5 px-4 sm:px-6">BOOK NO</th>
                   <th className="py-3.5 px-4 sm:px-6">BORROWER</th>
                   <th className="py-3.5 px-4 sm:px-6">PHONE</th>
                   <th className="py-3.5 px-4 sm:px-6">LINE</th>
@@ -459,7 +465,7 @@ export const DashboardScreen: React.FC = () => {
                   /* Empty State: Keep headers visible, show exact empty text */
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-12 px-4 text-center text-[#64748b] font-medium"
                     >
                       No borrowers found.
@@ -481,6 +487,9 @@ export const DashboardScreen: React.FC = () => {
                         key={borrower.id}
                         className="hover:bg-slate-50/60 transition-colors"
                       >
+                        <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium">
+                          {borrower.bookNo !== null && borrower.bookNo !== undefined ? borrower.bookNo : '—'}
+                        </td>
                         <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b]">
                           {borrower.borrowerName || borrower.name}
                         </td>

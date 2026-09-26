@@ -73,6 +73,7 @@ export const COLLECTION_METHODS: CollectionMethod[] = [
 
 export interface Borrower {
   id: string;
+  bookNo?: number | null;
   name: string;
   borrowerName: string;
   phone: string;
@@ -104,6 +105,7 @@ export interface Borrower {
 }
 
 export type NewBorrowerInput = {
+  bookNo?: number | null;
   borrowerName: string;
   phoneNumber: string;
   alternatePhoneNumber?: string;

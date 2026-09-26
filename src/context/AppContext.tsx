@@ -119,6 +119,7 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
 
   return {
     id: row.id,
+    bookNo: row.book_no !== null && row.book_no !== undefined ? Number(row.book_no) : null,
     name: borrowerName,
     borrowerName: borrowerName,
     phone: phoneVal,
@@ -1088,6 +1089,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addBorrower = async (data: NewBorrowerInput): Promise<{ success: boolean; error?: string; borrowerId?: string }> => {
+    const parsedBookNo = data.bookNo !== undefined && data.bookNo !== null ? Number(data.bookNo) : null;
+
     if (isCloudAuth && currentUser && supabase) {
       try {
         const startIso = toDbDate(data.startDate) || getTodayIsoDate();
@@ -1097,6 +1100,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .from('borrowers')
           .insert({
             company_id: currentUser.companyId,
+            book_no: parsedBookNo,
             name: data.borrowerName.trim(),
             phone: data.phoneNumber.trim(),
             alternate_phone: data.alternatePhoneNumber?.trim() || null,
@@ -1125,6 +1129,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (error) {
           console.error('Supabase addBorrower error:', error);
+          if (
+            error.code === '23505' ||
+            (error.message && error.message.includes('idx_borrowers_company_book_no')) ||
+            (error.message && error.message.includes('chk_borrower_book_no_range'))
+          ) {
+            return {
+              success: false,
+              error: `Book No ${parsedBookNo} is already assigned to another borrower. Please select another Book No.`,
+            };
+          }
           return { success: false, error: error.message };
         }
 
@@ -1138,9 +1152,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Local / Offline fallback
+    if (parsedBookNo !== null && borrowers.some(b => b.bookNo === parsedBookNo)) {
+      return {
+        success: false,
+        error: `Book No ${parsedBookNo} is already assigned to another borrower. Please select another Book No.`,
+      };
+    }
+
     const now = new Date().toISOString();
     const newBorrower: Borrower = {
       id: Date.now().toString(),
+      bookNo: parsedBookNo,
       ...data,
       weeklyCollectionDay: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
       monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
@@ -1195,6 +1217,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isCloudAuth && currentUser && supabase) {
       try {
         const updatePayload: any = {};
+        if (data.bookNo !== undefined) {
+          updatePayload.book_no = data.bookNo !== null ? Number(data.bookNo) : null;
+        }
         if (data.borrowerName !== undefined) updatePayload.name = data.borrowerName.trim();
         if (data.phoneNumber !== undefined) updatePayload.phone = data.phoneNumber.trim();
         if (data.alternatePhoneNumber !== undefined) updatePayload.alternate_phone = data.alternatePhoneNumber.trim() || null;

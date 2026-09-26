@@ -36,7 +36,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   initialBorrower,
   onUpdate,
 }) => {
-  const { addBorrower, timeframe, agents, settings, collectionLines, currentUser, isCloudAuth } = useApp();
+  const { addBorrower, timeframe, borrowers, agents, settings, collectionLines, currentUser, isCloudAuth } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active collection lines for borrower assignment
@@ -49,6 +49,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const defaultType = settings?.defaultFinanceType || timeframe || 'Daily';
 
   // Form Fields
+  const [bookNo, setBookNo] = useState<string>('');
   const [borrowerName, setBorrowerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [alternatePhoneNumber, setAlternatePhoneNumber] = useState('');
@@ -76,6 +77,29 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Used Book Numbers in current company (excluding the initialBorrower being edited, if any)
+  const usedBookNos = useMemo(() => {
+    const set = new Set<number>();
+    for (const b of borrowers) {
+      if (b.bookNo !== null && b.bookNo !== undefined) {
+        if (initialBorrower && b.id === initialBorrower.id) continue;
+        set.add(b.bookNo);
+      }
+    }
+    return set;
+  }, [borrowers, initialBorrower]);
+
+  // Available Book Numbers from 1 to 1000
+  const availableBookNos = useMemo(() => {
+    const list: number[] = [];
+    for (let i = 1; i <= 1000; i++) {
+      if (!usedBookNos.has(i)) {
+        list.push(i);
+      }
+    }
+    return list;
+  }, [usedBookNos]);
+
   // Active agents available for assignment
   const activeAgents = useMemo(() => agents.filter((a) => a.status === 'active'), [agents]);
 
@@ -98,6 +122,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (initialBorrower) {
+        setBookNo(initialBorrower.bookNo !== null && initialBorrower.bookNo !== undefined ? String(initialBorrower.bookNo) : '');
         setBorrowerName(initialBorrower.borrowerName || initialBorrower.name || '');
         setPhoneNumber(initialBorrower.phoneNumber || initialBorrower.phone || '');
         setAlternatePhoneNumber(initialBorrower.alternatePhoneNumber || '');
@@ -121,6 +146,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setIsExistingLoan(Boolean(initialBorrower.isExistingLoan));
       } else {
         const initialType = settings?.defaultFinanceType || timeframe || 'Daily';
+        setBookNo('');
         setBorrowerName('');
         setPhoneNumber('');
         setAlternatePhoneNumber('');
@@ -217,6 +243,15 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
+
+    const numBookNo = parseInt(bookNo, 10);
+    if (!bookNo || isNaN(numBookNo)) {
+      newErrors.bookNo = 'Book No is required';
+    } else if (numBookNo < 1 || numBookNo > 1000) {
+      newErrors.bookNo = 'Book No must be between 1 and 1000';
+    } else if (usedBookNos.has(numBookNo)) {
+      newErrors.bookNo = `Book No ${numBookNo} is already assigned to another borrower. Please select another Book No.`;
+    }
 
     if (!borrowerName.trim()) {
       newErrors.borrowerName = 'Borrower Name is required';
@@ -353,6 +388,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     e.preventDefault();
     if (!validate()) return;
 
+    const numBookNo = parseInt(bookNo, 10);
     const loanVal = parseFloat(loanAmount);
     const deductedVal = parseFloat(deductedAmount || '0');
     const commissionVal = parseFloat(agentCommission || '0');
@@ -360,6 +396,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     const interestVal = parseFloat(calculatedInterestRate?.replace('%', '') || '0');
 
     const payload: NewBorrowerInput = {
+      bookNo: isNaN(numBookNo) ? null : numBookNo,
       borrowerName: borrowerName.trim(),
       phoneNumber: phoneNumber.trim(),
       alternatePhoneNumber: alternatePhoneNumber.trim() || undefined,
@@ -367,7 +404,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       financeType,
       weeklyCollectionDay: financeType === 'Weekly' ? weeklyCollectionDay : null,
       monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
-      collectionLine: collectionLine ? collectionLine.trim() : 'Karumandapam',
+      collectionLine: collectionLine ? collectionLine.trim() : null,
       collectionMethod: collectionMethod ? collectionMethod.trim() : 'Hand Cash',
       agentId: selectedAgentId ? selectedAgentId : null,
       agentCommission: commissionVal,
@@ -415,6 +452,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     }
 
     // Reset and close
+    setBookNo('');
     setBorrowerName('');
     setPhoneNumber('');
     setAlternatePhoneNumber('');
@@ -460,32 +498,67 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
         {/* Modal Body - Vertically Scrollable */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Server / General Error Alert */}
+          {errors.general && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-rose-700 text-xs sm:text-sm font-medium animate-in fade-in">
+              <AlertCircle size={18} className="shrink-0 mt-0.5 text-rose-600" />
+              <span>{errors.general}</span>
+            </div>
+          )}
+
           {/* Section 1: Basic Information */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
               Borrower Details
             </h3>
 
-            {/* 1. Borrower Name */}
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                Borrower Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={borrowerName}
-                onChange={(e) => setBorrowerName(e.target.value)}
-                placeholder="Enter borrower name"
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
-              />
-              {errors.borrowerName && (
-                <p className="text-xs text-red-500 mt-1 font-medium">{errors.borrowerName}</p>
-              )}
-            </div>
+            {/* Row 1: Book No, Borrower Name, Phone Number, Alternate Phone (4 Columns on Desktop) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Book No */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Book No <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={bookNo}
+                  onChange={(e) => setBookNo(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all cursor-pointer"
+                >
+                  <option value="">Select Book No (1 - 1000)</option>
+                  {availableBookNos.map((num) => (
+                    <option key={num} value={num}>
+                      {num}
+                    </option>
+                  ))}
+                  {initialBorrower?.bookNo && !availableBookNos.includes(initialBorrower.bookNo) && (
+                    <option value={initialBorrower.bookNo}>
+                      {initialBorrower.bookNo} (Current)
+                    </option>
+                  )}
+                </select>
+                {errors.bookNo && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.bookNo}</p>
+                )}
+              </div>
 
-            {/* 2 & 3. Phone & Alternate Phone (2 Columns on Desktop) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* 2. Phone Number */}
+              {/* 2. Borrower Name */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Borrower Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={borrowerName}
+                  onChange={(e) => setBorrowerName(e.target.value)}
+                  placeholder="Enter borrower name"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                />
+                {errors.borrowerName && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.borrowerName}</p>
+                )}
+              </div>
+
+              {/* 3. Phone Number */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Phone Number <span className="text-red-500">*</span>
@@ -509,10 +582,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 )}
               </div>
 
-              {/* 3. Alternate Phone Number */}
+              {/* 4. Alternate Phone Number */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                  Alternate Phone Number (Optional)
+                  Alternate Phone (Optional)
                 </label>
                 <div className="relative">
                   <Phone
@@ -534,7 +607,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               </div>
             </div>
 
-            {/* 4. Address */}
+            {/* Address */}
             <div>
               <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                 Address
