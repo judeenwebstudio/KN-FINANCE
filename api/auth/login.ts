@@ -135,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 7. Establish Supabase Auth Session
     const authUserId = authResult.auth_user_id;
-    const internalEmail = `u_${authResult.company_user_id}@knfinance.internal`;
+    const canonicalEmail = `u_${authResult.company_user_id}@knfinance.internal`;
 
     let userRecord: any = null;
     if (authUserId) {
@@ -146,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!userRecord) {
       // Attempt to create confirmed internal user in auth.users with server-controlled app_metadata
       const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-        email: internalEmail,
+        email: canonicalEmail,
         email_confirm: true,
         app_metadata: {
           company_user_id: authResult.company_user_id,
@@ -161,7 +161,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // If email already exists, direct single-user resolution via generateLink (no collection enumeration)
         const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
           type: 'magiclink',
-          email: internalEmail,
+          email: canonicalEmail,
         });
 
         if (linkErr || !linkData?.user) {
@@ -177,9 +177,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Authentication session generation failed.' });
     }
 
-    // Always synchronize server-controlled app_metadata on every login (safely merging existing app_metadata)
+    // Always synchronize server-controlled canonical email and app_metadata on every login
     const currentAppMeta = userRecord.app_metadata || {};
     const needsAppMetaUpdate =
+      userRecord.email !== canonicalEmail ||
       currentAppMeta.company_user_id !== authResult.company_user_id ||
       currentAppMeta.company_id !== authResult.company_id ||
       currentAppMeta.role !== authResult.role;
@@ -188,6 +189,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { data: updatedUser, error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(
         userRecord.id,
         {
+          email: canonicalEmail,
+          email_confirm: true,
           app_metadata: {
             ...currentAppMeta,
             company_user_id: authResult.company_user_id,
@@ -232,7 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Generate authenticated session using admin link verification (no email dispatched)
     const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
-      email: userRecord.email || internalEmail,
+      email: userRecord.email || canonicalEmail,
     });
 
     if (linkErr || !linkData?.properties?.hashed_token) {

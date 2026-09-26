@@ -89,10 +89,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Forbidden: No active company found for this manager.' });
     }
 
-    // 3. Handle POST: Create Agent
+    // 3. Handle POST: Create Agent OR Server-Controlled Identity Alignment
     if (req.method === 'POST') {
-      const { fullName, mobile, pin } = req.body || {};
+      const { action, agentId, fullName, mobile, pin } = req.body || {};
 
+      // Sub-action: Manager-Authenticated Canonical Identity Alignment for Existing Agent
+      if (action === 'repair_identity') {
+        if (!agentId) {
+          return res.status(400).json({ error: 'agentId is required for identity repair.' });
+        }
+
+        const { data: targetAgent, error: targetErr } = await supabaseAdmin
+          .from('company_users')
+          .select('id, company_id, auth_user_id, role, full_name, mobile, status')
+          .eq('id', agentId)
+          .eq('company_id', managerProfile.company_id)
+          .maybeSingle();
+
+        if (targetErr || !targetAgent) {
+          return res.status(404).json({ error: 'Agent not found in your company.' });
+        }
+
+        if (targetAgent.role !== 'agent') {
+          return res.status(400).json({ error: 'Can only repair Agent identities.' });
+        }
+
+        if (!targetAgent.auth_user_id) {
+          return res.status(400).json({ error: 'Agent has no linked auth identity.' });
+        }
+
+        const canonicalEmail = `u_${targetAgent.id}@knfinance.internal`;
+        const { error: authUpErr } = await supabaseAdmin.auth.admin.updateUserById(
+          targetAgent.auth_user_id,
+          {
+            email: canonicalEmail,
+            email_confirm: true,
+            app_metadata: {
+              company_user_id: targetAgent.id,
+              company_id: managerProfile.company_id,
+              role: 'agent',
+            },
+          }
+        );
+
+        if (authUpErr) {
+          console.error('[auth/agent] Repair identity failed:', authUpErr.message);
+          return res.status(500).json({ error: 'Failed to update Agent identity.' });
+        }
+
+        // Verify linkage via repair_auth_user_linkage
+        await supabaseAdmin.rpc('repair_auth_user_linkage', {
+          p_trusted_company_user_id: targetAgent.id,
+          p_auth_user_id: targetAgent.auth_user_id,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: 'Agent identity aligned to canonical format successfully.',
+        });
+      }
+
+      // Standard Agent Creation Flow
       const cleanName = String(fullName || '').trim();
       const normMobile = String(mobile || '').replace(/\D/g, '');
       const cleanPin = String(pin || '').trim();
@@ -113,12 +170,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Mobile number cannot be the same as the Manager’s mobile number.' });
       }
 
-      // Create Agent Auth Identity in GoTrue
-      const internalEmail = `u_agent_${normMobile}_${companyCode.toLowerCase()}@knfinance.internal`;
+      // Stage 1: Create Initial GoTrue Auth User
+      const tempEmail = `u_agent_${normMobile}_${companyCode.toLowerCase()}@knfinance.internal`;
       let agentAuthUserId: string;
 
       const { data: newAuthUser, error: authCreateErr } = await supabaseAdmin.auth.admin.createUser({
-        email: internalEmail,
+        email: tempEmail,
         email_confirm: true,
         user_metadata: {
           role: 'agent',
@@ -131,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         agentAuthUserId = newAuthUser.user.id;
       } else {
         const { data: listResp } = await supabaseAdmin.auth.admin.listUsers();
-        const existing = listResp?.users?.find((u) => u.email === internalEmail);
+        const existing = listResp?.users?.find((u) => u.email === tempEmail);
         if (!existing) {
           console.error('[auth/agent] Failed to create auth user:', authCreateErr?.message);
           return res.status(500).json({ error: 'Could not create cloud auth identity for Agent.' });
@@ -139,7 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         agentAuthUserId = existing.id;
       }
 
-      // Execute database-level agent creation transaction using companyCode
+      // Stage 2: Create Agent in database via manager_create_cloud_agent
       const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc('manager_create_cloud_agent', {
         p_company_code: companyCode,
         p_full_name: cleanName,
@@ -161,10 +218,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ error: result?.message || 'Unauthorized.' });
       }
 
+      const canonicalCompanyUserId = result.agent_id;
+      const canonicalEmail = `u_${canonicalCompanyUserId}@knfinance.internal`;
+
+      // Stage 3: Immediately bind GoTrue identity to Canonical Email and Authoritative app_metadata
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(agentAuthUserId, {
+          email: canonicalEmail,
+          email_confirm: true,
+          app_metadata: {
+            company_user_id: canonicalCompanyUserId,
+            company_id: managerProfile.company_id,
+            role: 'agent',
+          },
+        });
+      } catch (bindErr) {
+        console.error('[auth/agent] Warning: could not set canonical app_metadata on GoTrue identity:', bindErr);
+      }
+
       return res.status(201).json({
         success: true,
         agent: {
-          id: result.agent_id,
+          id: canonicalCompanyUserId,
           fullName: cleanName,
           mobile: normMobile,
           role: 'agent',
