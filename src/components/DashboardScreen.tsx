@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Users,
   IndianRupee,
@@ -12,7 +12,7 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { DASHBOARD_LINE_FILTER_OPTIONS, type DashboardLineFilter } from '../types';
+import { type DashboardLineFilter } from '../types';
 import { AddBorrowerModal } from './AddBorrowerModal';
 import { ActiveBorrowersModal } from './ActiveBorrowersModal';
 import { CollectionsModal } from './CollectionsModal';
@@ -34,6 +34,7 @@ export const DashboardScreen: React.FC = () => {
     agents,
     settings,
     timeframe,
+    collectionLines,
     borrowerFilter,
     setBorrowerFilter,
     searchQuery,
@@ -45,6 +46,13 @@ export const DashboardScreen: React.FC = () => {
     getTotalOutFlow,
     getBorrowerPaidAmount,
   } = useApp();
+
+  const lineFilterOptions = useMemo(() => {
+    const activeNames = collectionLines
+      .filter((l) => l.status === 'active')
+      .map((l) => l.name);
+    return ['All Lines', ...activeNames];
+  }, [collectionLines]);
 
   const [selectedLine, setSelectedLine] = useState<DashboardLineFilter>('All Lines');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -177,8 +185,8 @@ export const DashboardScreen: React.FC = () => {
 
               {/* Line Dropdown panel */}
               {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                  {DASHBOARD_LINE_FILTER_OPTIONS.map((option) => (
+                <div className="absolute right-0 mt-2 w-48 max-h-64 overflow-y-auto bg-white rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  {lineFilterOptions.map((option) => (
                     <button
                       key={option}
                       type="button"
@@ -189,7 +197,7 @@ export const DashboardScreen: React.FC = () => {
                           : 'text-[#1e293b] hover:bg-slate-50'
                       }`}
                     >
-                      {option}
+                      <span className="truncate">{option}</span>
                     </button>
                   ))}
                 </div>

@@ -4,8 +4,8 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
 import { calculateBorrowerEndDate } from '../utils/loanCalculations';
-import { COLLECTION_LINES, COLLECTION_METHODS } from '../types';
-import type { Timeframe, Borrower, NewBorrowerInput, CollectionLine, CollectionMethod } from '../types';
+import { COLLECTION_METHODS } from '../types';
+import type { Timeframe, Borrower, NewBorrowerInput, CollectionMethod } from '../types';
 
 interface AddBorrowerModalProps {
   isOpen: boolean;
@@ -36,8 +36,14 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   initialBorrower,
   onUpdate,
 }) => {
-  const { addBorrower, timeframe, agents, settings, currentUser, isCloudAuth } = useApp();
+  const { addBorrower, timeframe, agents, settings, collectionLines, currentUser, isCloudAuth } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Active collection lines for borrower assignment
+  const activeLines = useMemo(
+    () => collectionLines.filter((l) => l.status === 'active'),
+    [collectionLines]
+  );
 
   // Determine initial default finance type from settings or timeframe
   const defaultType = settings?.defaultFinanceType || timeframe || 'Daily';
@@ -50,7 +56,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [financeType, setFinanceType] = useState<Timeframe>(defaultType);
   const [weeklyCollectionDay, setWeeklyCollectionDay] = useState<number>(1); // 1 = Monday ... 7 = Sunday
   const [monthlyCollectionDay, setMonthlyCollectionDay] = useState<number>(1); // 1 .. 31
-  const [collectionLine, setCollectionLine] = useState<CollectionLine>('Karumandapam');
+  const [collectionLine, setCollectionLine] = useState<string>('');
   const [collectionMethod, setCollectionMethod] = useState<CollectionMethod>('Hand Cash');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [agentCommission, setAgentCommission] = useState('0');
@@ -80,6 +86,14 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return found && found.status === 'inactive' ? found : null;
   }, [selectedAgentId, agents]);
 
+  // Check if initialBorrower has a collection line that was deactivated later
+  const inactiveAssignedLine = useMemo(() => {
+    const lineName = initialBorrower?.collectionLine;
+    if (!lineName) return null;
+    const isPresentInActive = activeLines.some((l) => l.name === lineName);
+    return !isPresentInActive ? lineName : null;
+  }, [initialBorrower, activeLines]);
+
   // Reset or sync when opened
   useEffect(() => {
     if (isOpen) {
@@ -91,7 +105,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setFinanceType(initialBorrower.financeType || 'Daily');
         setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || 1);
         setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || 1);
-        setCollectionLine((initialBorrower.collectionLine as CollectionLine) || 'Karumandapam');
+        setCollectionLine(initialBorrower.collectionLine || activeLines[0]?.name || '');
         setCollectionMethod((initialBorrower.collectionMethod as CollectionMethod) || 'Hand Cash');
         setSelectedAgentId(initialBorrower.agentId || '');
         setAgentCommission(
@@ -114,7 +128,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setFinanceType(initialType);
         setWeeklyCollectionDay(1);
         setMonthlyCollectionDay(1);
-        setCollectionLine('Karumandapam');
+        setCollectionLine(activeLines[0]?.name || '');
         setCollectionMethod('Hand Cash');
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
@@ -270,8 +284,18 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       }
     }
 
-    if (!collectionLine || !COLLECTION_LINES.includes(collectionLine)) {
+    if (activeLines.length === 0 && !inactiveAssignedLine) {
+      newErrors.collectionLine = 'No collection lines available. Please create a Collection Line first in Profile → Collection Lines.';
+    } else if (!collectionLine || !collectionLine.trim()) {
       newErrors.collectionLine = 'Please select a valid Line';
+    } else {
+      const validLineNames = [
+        ...activeLines.map((l) => l.name),
+        ...(inactiveAssignedLine ? [inactiveAssignedLine] : []),
+      ];
+      if (!validLineNames.includes(collectionLine)) {
+        newErrors.collectionLine = 'Please select a valid Line';
+      }
     }
 
     if (!collectionMethod || !COLLECTION_METHODS.includes(collectionMethod)) {
@@ -639,14 +663,28 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 </label>
                 <select
                   value={collectionLine}
-                  onChange={(e) => setCollectionLine(e.target.value as CollectionLine)}
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                  onChange={(e) => setCollectionLine(e.target.value)}
+                  disabled={activeLines.length === 0 && !inactiveAssignedLine}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
-                  {COLLECTION_LINES.map((line) => (
-                    <option key={line} value={line}>
-                      {line}
+                  {activeLines.length === 0 && !inactiveAssignedLine ? (
+                    <option value="" disabled>
+                      No collection lines available — Create a Line in Profile → Collection Lines
                     </option>
-                  ))}
+                  ) : (
+                    <>
+                      {activeLines.map((line) => (
+                        <option key={line.id} value={line.name}>
+                          {line.name}
+                        </option>
+                      ))}
+                      {inactiveAssignedLine && !activeLines.some((l) => l.name === inactiveAssignedLine) && (
+                        <option value={inactiveAssignedLine}>
+                          {inactiveAssignedLine} (Inactive)
+                        </option>
+                      )}
+                    </>
+                  )}
                 </select>
                 {errors.collectionLine && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.collectionLine}</p>

@@ -48,24 +48,21 @@ export interface StoredAgentRecord extends AgentUser {
   pinHash: string;
 }
 
-export type CollectionLine = 'Karumandapam' | 'Manachanallur' | 'Thiruverumbur' | 'Lalgudi';
+export interface CompanyCollectionLine {
+  id: string;
+  companyId?: string;
+  name: string;
+  status: 'active' | 'inactive';
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-export const COLLECTION_LINES: CollectionLine[] = [
-  'Karumandapam',
-  'Manachanallur',
-  'Thiruverumbur',
-  'Lalgudi',
-];
+export type CollectionLine = string;
 
-export const DASHBOARD_LINE_FILTER_OPTIONS = [
-  'All Lines',
-  'Karumandapam',
-  'Manachanallur',
-  'Thiruverumbur',
-  'Lalgudi',
-] as const;
+export const DEFAULT_COLLECTION_LINES: string[] = [];
+export const COLLECTION_LINES: string[] = [];
 
-export type DashboardLineFilter = (typeof DASHBOARD_LINE_FILTER_OPTIONS)[number];
+export type DashboardLineFilter = string;
 
 export type CollectionMethod = 'Hand Cash' | 'Banking';
 
@@ -173,6 +170,9 @@ export type ActivityAction =
   | 'agent_deactivated'
   | 'manager_updated'
   | 'company_updated'
+  | 'collection_line_created'
+  | 'collection_line_updated'
+  | 'collection_line_status_changed'
   | 'pin_changed'
   | 'backup_created'
   | 'backup_restored'

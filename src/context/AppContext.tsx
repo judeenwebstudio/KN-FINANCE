@@ -14,6 +14,7 @@ import type {
   ActivityLogEntry,
   AppSettings,
   CashLedgerEntry,
+  CompanyCollectionLine,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
@@ -38,6 +39,7 @@ interface AppContextType {
   company: CompanyProfile | null;
   agents: AgentUser[];
   borrowers: Borrower[];
+  collectionLines: CompanyCollectionLine[];
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
   cashLedger: CashLedgerEntry[];
@@ -55,6 +57,9 @@ interface AppContextType {
   addAgent: (data: { fullName: string; mobile: string; pin: string }) => Promise<{ success: boolean; error?: string }>;
   updateAgent: (id: string, data: { fullName?: string; mobile?: string; pin?: string; status?: 'active' | 'inactive' }) => Promise<{ success: boolean; error?: string }>;
   toggleAgentStatus: (id: string) => void;
+  addCollectionLine: (name: string) => Promise<{ success: boolean; error?: string }>;
+  updateCollectionLine: (id: string, newName: string) => Promise<{ success: boolean; error?: string }>;
+  toggleCollectionLineStatus: (id: string) => Promise<{ success: boolean; error?: string }>;
   setTimeframe: (tf: Timeframe) => void;
   setBorrowerFilter: (f: BorrowerFilter) => void;
   addBorrower: (data: NewBorrowerInput) => Promise<{ success: boolean; error?: string; borrowerId?: string }>;
@@ -327,6 +332,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  const [collectionLines, setCollectionLines] = useState<CompanyCollectionLine[]>(() => {
+    try {
+      const saved = localStorage.getItem('kn_finance_collection_lines');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((item: any) => ({
+        id: item.id || `line_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        companyId: item.companyId || item.company_id,
+        name: item.name || '',
+        status: (item.status === 'inactive' ? 'inactive' : 'active') as 'active' | 'inactive',
+        createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+        updatedAt: item.updatedAt || item.updated_at || new Date().toISOString(),
+      }));
+    } catch {
+      return [];
+    }
+  });
+
   const [timeframe, setTimeframe] = useState<Timeframe>('Daily');
   const [borrowerFilter, setBorrowerFilter] = useState<BorrowerFilter>('Active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -360,6 +384,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error(e);
     }
   }, [payments, isCloudAuth]);
+
+  useEffect(() => {
+    try {
+      if (!isCloudAuth) {
+        localStorage.setItem('kn_finance_collection_lines', JSON.stringify(collectionLines));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [collectionLines, isCloudAuth]);
 
   useEffect(() => {
     try {
@@ -455,7 +489,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPayments(mappedPayments);
       }
 
-      // 4. Fetch Cash Ledger (Manager only)
+      // 4. Fetch Collection Lines (Manager & Agent can view)
+      const { data: clData, error: clErr } = await (supabase as any)
+        .from('company_collection_lines')
+        .select('*')
+        .eq('company_id', currentUser.companyId)
+        .order('created_at', { ascending: true });
+
+      if (!clErr && clData && (clData as any[]).length > 0) {
+        setCollectionLines((clData as any[]).map(cl => ({
+          id: cl.id,
+          companyId: cl.company_id,
+          name: cl.name,
+          status: cl.status as 'active' | 'inactive',
+          createdAt: cl.created_at,
+          updatedAt: cl.updated_at,
+        })));
+      }
+
+      // 5. Fetch Cash Ledger (Manager only)
       if (currentUser.role === 'manager') {
         const { data: cData, error: cErr } = await (supabase as any)
           .from('company_cash_ledger')
@@ -485,6 +537,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fetchCloudData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => {
+        fetchCloudData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_collection_lines' }, () => {
         fetchCloudData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_cash_ledger' }, () => {
@@ -838,6 +893,198 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { ...agent, status: nextStatus };
       })
     );
+  };
+
+  const addCollectionLine = async (name: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return { success: false, error: 'Line name cannot be blank' };
+    }
+
+    if (collectionLines.some(l => l.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      return { success: false, error: 'A collection line with this name already exists' };
+    }
+
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        const { error } = await (supabase as any)
+          .from('company_collection_lines')
+          .insert({
+            company_id: currentUser.companyId,
+            name: trimmed,
+            status: 'active',
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Supabase addCollectionLine error:', error);
+          return { success: false, error: error.message };
+        }
+
+        await fetchCloudData();
+        addActivity({
+          action: 'collection_line_created',
+          performedByUserId: currentUser.companyUserId,
+          performedByRole: currentUser.role,
+          message: `Collection line "${trimmed}" was created.`,
+        });
+        return { success: true };
+      } catch (err: any) {
+        console.error('addCollectionLine exception:', err);
+        return { success: false, error: err.message || 'Failed to add collection line in cloud.' };
+      }
+    }
+
+    // Local / Offline fallback
+    const now = new Date().toISOString();
+    const newLine: CompanyCollectionLine = {
+      id: `line_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: trimmed,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    };
+    setCollectionLines(prev => [...prev, newLine]);
+    addActivity({
+      action: 'collection_line_created',
+      performedByUserId: null,
+      performedByRole: 'manager',
+      message: `Collection line "${trimmed}" was created.`,
+    });
+    return { success: true };
+  };
+
+  const updateCollectionLine = async (id: string, newName: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      return { success: false, error: 'Line name cannot be blank' };
+    }
+
+    const existingLine = collectionLines.find(l => l.id === id);
+    if (!existingLine) {
+      return { success: false, error: 'Collection line not found' };
+    }
+
+    const oldName = existingLine.name;
+
+    if (collectionLines.some(l => l.id !== id && l.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      return { success: false, error: 'A collection line with this name already exists' };
+    }
+
+    if (oldName === trimmed) {
+      return { success: true };
+    }
+
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        const { data: rpcData, error: rpcErr } = await (supabase as any)
+          .rpc('rename_company_collection_line', {
+            p_line_id: id,
+            p_new_name: trimmed,
+          });
+
+        if (!rpcErr && rpcData) {
+          const res = typeof rpcData === 'string' ? JSON.parse(rpcData) : rpcData;
+          if (res.success === false) {
+            return { success: false, error: res.error || 'Failed to rename collection line' };
+          }
+        } else {
+          // Fallback direct table updates
+          const { error: lineErr } = await (supabase as any)
+            .from('company_collection_lines')
+            .update({ name: trimmed, updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .eq('company_id', currentUser.companyId);
+
+          if (lineErr) {
+            return { success: false, error: lineErr.message };
+          }
+
+          await (supabase as any)
+            .from('borrowers')
+            .update({ collection_line: trimmed, updated_at: new Date().toISOString() })
+            .eq('company_id', currentUser.companyId)
+            .eq('collection_line', oldName);
+        }
+
+        await fetchCloudData();
+        addActivity({
+          action: 'collection_line_updated',
+          performedByUserId: currentUser.companyUserId,
+          performedByRole: currentUser.role,
+          message: `Collection line "${oldName}" was renamed to "${trimmed}".`,
+        });
+        return { success: true };
+      } catch (err: any) {
+        console.error('updateCollectionLine exception:', err);
+        return { success: false, error: err.message || 'Failed to update collection line in cloud.' };
+      }
+    }
+
+    // Local / Offline fallback
+    const now = new Date().toISOString();
+    setCollectionLines(prev => prev.map(l => l.id === id ? { ...l, name: trimmed, updatedAt: now } : l));
+    setBorrowers(prev => prev.map(b => b.collectionLine === oldName ? { ...b, collectionLine: trimmed } : b));
+    addActivity({
+      action: 'collection_line_updated',
+      performedByUserId: null,
+      performedByRole: 'manager',
+      message: `Collection line "${oldName}" was renamed to "${trimmed}".`,
+    });
+    return { success: true };
+  };
+
+  const toggleCollectionLineStatus = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const target = collectionLines.find((l) => l.id === id);
+    if (!target) {
+      return { success: false, error: 'Collection line not found' };
+    }
+
+    const nextStatus: 'active' | 'inactive' = target.status === 'active' ? 'inactive' : 'active';
+    const now = new Date().toISOString();
+
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        const { error } = await (supabase as any)
+          .from('company_collection_lines')
+          .update({ status: nextStatus, updated_at: now })
+          .eq('id', id)
+          .eq('company_id', currentUser.companyId);
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+
+        await fetchCloudData();
+        addActivity({
+          action: 'collection_line_status_changed',
+          performedByUserId: currentUser.companyUserId,
+          performedByRole: currentUser.role,
+          message: `Collection line "${target.name}" was ${nextStatus === 'active' ? 'activated' : 'deactivated'}.`,
+        });
+        return { success: true };
+      } catch (err: any) {
+        console.error('toggleCollectionLineStatus exception:', err);
+        return { success: false, error: err.message || 'Failed to toggle collection line status.' };
+      }
+    }
+
+    // Local / Offline fallback
+    setCollectionLines((prev) =>
+      prev.map((line) => {
+        if (line.id !== id) return line;
+        return { ...line, status: nextStatus, updatedAt: now };
+      })
+    );
+
+    addActivity({
+      action: 'collection_line_status_changed',
+      performedByUserId: null,
+      performedByRole: 'manager',
+      message: `Collection line "${target.name}" was ${nextStatus === 'active' ? 'activated' : 'deactivated'}.`,
+    });
+    return { success: true };
   };
 
   const addBorrower = async (data: NewBorrowerInput): Promise<{ success: boolean; error?: string; borrowerId?: string }> => {
@@ -1302,6 +1549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         company,
         agents: sanitizedAgents,
         borrowers,
+        collectionLines,
         payments,
         activityLogs,
         cashLedger,
@@ -1319,6 +1567,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addAgent,
         updateAgent,
         toggleAgentStatus,
+        addCollectionLine,
+        updateCollectionLine,
+        toggleCollectionLineStatus,
         setTimeframe,
         setBorrowerFilter,
         addBorrower,

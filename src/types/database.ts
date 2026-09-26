@@ -326,6 +326,30 @@ export interface DbCompanyCashLedgerUpdate {
   note?: string | null;
 }
 
+export interface DbCompanyCollectionLine {
+  id: string;
+  company_id: string;
+  name: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbCompanyCollectionLineInsert {
+  id?: string;
+  company_id: string;
+  name: string;
+  status?: 'active' | 'inactive';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DbCompanyCollectionLineUpdate {
+  name?: string;
+  status?: 'active' | 'inactive';
+  updated_at?: string;
+}
+
 /**
  * Top-level Database schema definition for Supabase client typing
  */
@@ -351,6 +375,11 @@ export interface Database {
         Row: DbBorrower;
         Insert: DbBorrowerInsert;
         Update: DbBorrowerUpdate;
+      };
+      company_collection_lines: {
+        Row: DbCompanyCollectionLine;
+        Insert: DbCompanyCollectionLineInsert;
+        Update: DbCompanyCollectionLineUpdate;
       };
       payments: {
         Row: DbPayment;
@@ -466,6 +495,19 @@ export interface Database {
           message: string;
           lockout_seconds: number | null;
         }[];
+      };
+      rename_company_collection_line: {
+        Args: {
+          p_line_id: string;
+          p_new_name: string;
+        };
+        Returns: {
+          success: boolean;
+          old_name?: string;
+          new_name?: string;
+          affected_borrowers?: number;
+          error?: string;
+        };
       };
     };
   };

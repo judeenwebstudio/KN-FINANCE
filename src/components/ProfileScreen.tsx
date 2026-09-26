@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Building2,
   Users,
+  MapPin,
   ClipboardList,
   Database,
   Settings,
@@ -14,6 +15,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { MyCompanyModal } from './MyCompanyModal';
 import { ManageUsersModal } from './ManageUsersModal';
+import { CollectionLinesModal } from './CollectionLinesModal';
 import { ActivityLogModal } from './ActivityLogModal';
 import { BackupRestoreModal } from './BackupRestoreModal';
 import { SettingsModal } from './SettingsModal';
@@ -25,6 +27,7 @@ export const ProfileScreen: React.FC = () => {
   const { manager, currentUser, currentRole, logout, navigateTo } = useApp();
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isManageUsersOpen, setIsManageUsersOpen] = useState(false);
+  const [isCollectionLinesOpen, setIsCollectionLinesOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -32,7 +35,7 @@ export const ProfileScreen: React.FC = () => {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
-  // Role-based Menu Items (Both Manager and Agent can Change PIN)
+  // Role-based Menu Items (Collection Lines is Manager-only)
   const menuItems = currentRole === 'agent'
     ? [
         { label: 'Activity Log', icon: ClipboardList },
@@ -45,6 +48,7 @@ export const ProfileScreen: React.FC = () => {
     : [
         { label: 'My Company', icon: Building2 },
         { label: 'Manage Users', icon: Users },
+        { label: 'Collection Lines', icon: MapPin },
         { label: 'Activity Log', icon: ClipboardList },
         { label: 'Backup & Restore', icon: Database },
         { label: 'Settings', icon: Settings },
@@ -61,6 +65,8 @@ export const ProfileScreen: React.FC = () => {
       setIsCompanyModalOpen(true);
     } else if (label === 'Manage Users') {
       setIsManageUsersOpen(true);
+    } else if (label === 'Collection Lines') {
+      setIsCollectionLinesOpen(true);
     } else if (label === 'Activity Log') {
       setIsActivityLogOpen(true);
     } else if (label === 'Backup & Restore') {
@@ -182,6 +188,12 @@ export const ProfileScreen: React.FC = () => {
       <ManageUsersModal
         isOpen={isManageUsersOpen}
         onClose={() => setIsManageUsersOpen(false)}
+      />
+
+      {/* Collection Lines Modal (Manager only) */}
+      <CollectionLinesModal
+        isOpen={isCollectionLinesOpen}
+        onClose={() => setIsCollectionLinesOpen(false)}
       />
 
       {/* Activity Log Modal */}
