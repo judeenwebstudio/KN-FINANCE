@@ -139,9 +139,13 @@ export const DashboardScreen: React.FC = () => {
   // 3. Status filter & Work Queue (Active view shows only borrowers with an actionable due today or overdue)
   // 4. Search query (matches borrower name or phone)
   const filteredBorrowers = roleScopedBorrowers.filter((b) => {
-    // 1. Line filter
-    if (selectedLine !== 'All Lines' && b.collectionLine !== selectedLine) {
-      return false;
+    // 1. Line filter ('All Lines' shows all; specific line requires trimmed case-insensitive match)
+    if (selectedLine && selectedLine !== 'All Lines') {
+      const bLine = b.collectionLine ? b.collectionLine.trim().toLowerCase() : '';
+      const sLine = selectedLine.trim().toLowerCase();
+      if (!bLine || bLine !== sLine) {
+        return false;
+      }
     }
 
     // 2. Status & Work Queue filter
