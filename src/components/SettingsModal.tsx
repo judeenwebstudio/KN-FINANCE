@@ -15,6 +15,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { t } from '../utils/i18n';
 import { playPaymentSuccessSound } from '../utils/soundUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 import type { Language, AppDateFormat, Timeframe } from '../types';
 
 interface SettingsModalProps {
@@ -23,6 +24,13 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, () => {
+    if (isResetConfirmOpen) {
+      setIsResetConfirmOpen(false);
+      return;
+    }
+    onClose();
+  });
   const { settings, updateSettings, resetSettings } = useApp();
 
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);

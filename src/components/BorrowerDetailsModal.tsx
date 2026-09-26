@@ -28,6 +28,7 @@ import {
 import { resolveCollectorName } from '../utils/agentUtils';
 import { formatAppDate } from '../utils/dateUtils';
 import { playPaymentSuccessSound } from '../utils/soundUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface BorrowerDetailsModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   borrowerId,
   onClose,
 }) => {
+  useModalBackHandler(isOpen, onClose);
   const { borrowers, payments, manager, agents, addPayment, settings, currentUser, currentRole } = useApp();
 
   // Find fresh borrower record by ID so state is reactive to changes

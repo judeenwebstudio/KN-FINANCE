@@ -17,7 +17,11 @@ function getClientIp(req: VercelRequest): string {
   return 'unknown';
 }
 
+import { handleCors } from './_cors';
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
+
   // Only accept POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });

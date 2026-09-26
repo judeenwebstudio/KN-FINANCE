@@ -10,6 +10,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase';
+import { getApiUrl } from './apiUrl';
 import type { AuthUserSession } from '../types';
 
 export interface LoginResult {
@@ -95,7 +96,7 @@ export async function loginWithPin(
   isAuthenticating = true;
 
   try {
-    const response = await fetch('/api/auth/login', {
+    const response = await fetch(getApiUrl('/api/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -171,7 +172,7 @@ export async function bootstrapCloudManager(params: {
   }
 
   try {
-    const response = await fetch('/api/auth/bootstrap', {
+    const response = await fetch(getApiUrl('/api/auth/bootstrap'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -232,7 +233,7 @@ export async function createCloudAgent(params: {
   }
 
   try {
-    const response = await fetch('/api/auth/agent', {
+    const response = await fetch(getApiUrl('/api/auth/agent'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -274,7 +275,7 @@ export async function setCloudAgentStatus(
   }
 
   try {
-    const response = await fetch('/api/auth/agent', {
+    const response = await fetch(getApiUrl('/api/auth/agent'), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -407,7 +408,7 @@ export async function changeUserPin(params: {
 
   // Attempt serverless endpoint first
   try {
-    const response = await fetch('/api/auth/change-pin', {
+    const response = await fetch(getApiUrl('/api/auth/change-pin'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

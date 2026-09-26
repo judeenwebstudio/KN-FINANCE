@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Image as ImageIcon, Printer, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 import type { Borrower } from '../types';
 import { resolveAgentName } from '../utils/agentUtils';
 
@@ -15,6 +16,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
   onClose,
   onSelectBorrower,
 }) => {
+  useModalBackHandler(isOpen, onClose);
   const {
     borrowers,
     currentRole,

@@ -6,3 +6,25 @@ dist/
 .env.local
 *.local
 scratch/
+
+# Android Security & Build Artifacts
+*.jks
+*.keystore
+*.p8
+*.p12
+*.pem
+key.properties
+local.properties
+*.apk
+*.aab
+
+# Gradle & Android Build Outputs
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+android/captures/
+android/.idea/
+android/*.iml
+android/app/*.iml
+

@@ -11,6 +11,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 import type { AgentUser } from '../types';
 
 interface ManageUsersModalProps {
@@ -26,6 +27,27 @@ export const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onCl
   const [editingAgent, setEditingAgent] = useState<AgentUser | null>(null);
   const [isEditManagerOpen, setIsEditManagerOpen] = useState(false);
   const [deactivatingAgent, setDeactivatingAgent] = useState<AgentUser | null>(null);
+
+  // Modal Back Handler with sub-modal cascade
+  useModalBackHandler(isOpen, () => {
+    if (isAddAgentOpen) {
+      setIsAddAgentOpen(false);
+      return;
+    }
+    if (editingAgent) {
+      setEditingAgent(null);
+      return;
+    }
+    if (isEditManagerOpen) {
+      setIsEditManagerOpen(false);
+      return;
+    }
+    if (deactivatingAgent) {
+      setDeactivatingAgent(null);
+      return;
+    }
+    onClose();
+  });
 
   // Add Agent Form State
   const [addFullName, setAddFullName] = useState('');

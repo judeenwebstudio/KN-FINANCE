@@ -19,6 +19,7 @@ import {
 } from '../utils/backupUtils';
 import type { KNFinanceBackup } from '../types';
 import { formatActivityDateTime } from '../utils/activityUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface BackupRestoreModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  useModalBackHandler(isOpen, onClose);
   const {
     manager,
     company,

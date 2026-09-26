@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatAppDate } from '../utils/dateUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface OutFlowModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface OutFlowModalProps {
 }
 
 export const OutFlowModal: React.FC<OutFlowModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const { cashLedger, getTotalOutFlow, settings } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'LOAN_DISBURSED' | 'CASH_DECREASED'>('ALL');

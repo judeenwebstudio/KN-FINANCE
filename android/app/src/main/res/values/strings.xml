@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KN FINANCE</string>
+    <string name="title_activity_main">KN FINANCE</string>
+    <string name="package_name">com.knfinance.app</string>
+    <string name="custom_url_scheme">com.knfinance.app</string>
+</resources>

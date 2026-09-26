@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Building2, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface MyCompanyModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface MyCompanyModalProps {
 }
 
 export const MyCompanyModal: React.FC<MyCompanyModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const { manager, company, updateCompany } = useApp();
 
   const [companyName, setCompanyName] = useState('');

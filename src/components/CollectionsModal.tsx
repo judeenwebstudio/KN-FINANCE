@@ -3,6 +3,7 @@ import { Calendar, ChevronDown, Image as ImageIcon, Printer, X } from 'lucide-re
 import { useApp, getTodayIsoDate } from '../context/AppContext';
 import { resolveCollectorName } from '../utils/agentUtils';
 import { formatAppDate } from '../utils/dateUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface CollectionsModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface CollectionsModalProps {
 }
 
 export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const { payments, timeframe, company, manager, agents, settings } = useApp();
   const [selectedDateIso, setSelectedDateIso] = useState<string>(getTodayIsoDate());
 

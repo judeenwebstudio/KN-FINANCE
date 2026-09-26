@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
 import { calculateBorrowerEndDate } from '../utils/loanCalculations';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 import { COLLECTION_METHODS } from '../types';
 import type { Timeframe, Borrower, NewBorrowerInput, CollectionMethod } from '../types';
 
@@ -36,6 +37,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   initialBorrower,
   onUpdate,
 }) => {
+  useModalBackHandler(isOpen, onClose);
   const { addBorrower, timeframe, agents, settings, collectionLines, currentUser, isCloudAuth } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 

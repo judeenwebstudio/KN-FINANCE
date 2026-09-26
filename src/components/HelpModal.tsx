@@ -17,6 +17,8 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
+import { useModalBackHandler } from '../utils/useModalBackHandler';
+
 interface HelpModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -31,6 +33,7 @@ interface HelpSection {
 }
 
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     'getting-started': true,

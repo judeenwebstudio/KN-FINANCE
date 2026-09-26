@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, Image as ImageIcon, Printer, X, CheckCircle2 } from 'lucide-react';
 import { useApp, getTodayIsoDate } from '../context/AppContext';
 import { formatAppDate } from '../utils/dateUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface DueTodayModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface DueTodayModalProps {
 }
 
 export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const { timeframe, getDueBorrowersForDate, company, settings } = useApp();
   const [selectedDateIso, setSelectedDateIso] = useState<string>(getTodayIsoDate());
 

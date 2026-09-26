@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { KeyRound, X, Eye, EyeOff, Lock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { changeUserPin } from '../lib/authService';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface ChangePinModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface ChangePinModalProps {
 }
 
 export const ChangePinModal: React.FC<ChangePinModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const { isCloudAuth, manager, updateManager, addActivity, currentUser } = useApp();
 
   const [currentPin, setCurrentPin] = useState('');

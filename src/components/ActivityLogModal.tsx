@@ -19,6 +19,7 @@ import {
 import { useApp } from '../context/AppContext';
 import type { ActivityAction, ActivityLogEntry } from '../types';
 import { formatActivityDateTime, resolvePerformerName } from '../utils/activityUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface ActivityLogModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ interface ActivityLogModalProps {
 type FilterCategory = 'All' | 'Payments' | 'Borrowers' | 'Users' | 'Account';
 
 export const ActivityLogModal: React.FC<ActivityLogModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const { activityLogs, manager, agents, settings } = useApp();
   const [selectedFilter, setSelectedFilter] = useState<FilterCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatAppDate } from '../utils/dateUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 import type { CashTransactionType } from '../types';
 
 interface CashInHandModalProps {
@@ -20,6 +21,7 @@ interface CashInHandModalProps {
 }
 
 export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   const {
     cashLedger,
     getCashInHand,

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Info, X, CheckCircle2, Shield } from 'lucide-react';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -7,6 +8,7 @@ interface AboutModalProps {
 }
 
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
+  useModalBackHandler(isOpen, onClose);
   // Close on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

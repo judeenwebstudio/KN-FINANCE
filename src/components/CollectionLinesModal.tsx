@@ -10,6 +10,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 import type { CompanyCollectionLine } from '../types';
 
 interface CollectionLinesModalProps {
@@ -21,6 +22,7 @@ export const CollectionLinesModal: React.FC<CollectionLinesModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  useModalBackHandler(isOpen, onClose);
   const { currentRole, collectionLines, addCollectionLine, updateCollectionLine, toggleCollectionLineStatus } = useApp();
 
   const [newLineName, setNewLineName] = useState('');

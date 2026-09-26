@@ -21,6 +21,7 @@ import {
   calculateFinancialAnalytics,
   type FinancialAnalyticsData,
 } from '../utils/loanCalculations';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface FinancialAnalyticsModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const FinancialAnalyticsModal: React.FC<FinancialAnalyticsModalProps> = (
   isOpen,
   onClose,
 }) => {
+  useModalBackHandler(isOpen, onClose);
   const { borrowers, payments, timeframe: dashboardTimeframe, company } = useApp();
 
   // Period dropdown can be selected independently inside modal
