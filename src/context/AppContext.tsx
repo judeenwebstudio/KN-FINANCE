@@ -423,6 +423,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  const [companyCashSummary, setCompanyCashSummary] = useState<{
+    cashInHand: number;
+    totalOutFlow: number;
+    totalAdded: number;
+    totalDecreased: number;
+    totalDisbursed: number;
+    totalCollected: number;
+    totalDeducted: number;
+  } | null>(null);
+
   useEffect(() => {
     try {
       if (!isCloudAuth) {
@@ -515,7 +525,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })));
       }
 
-      // 5. Fetch Cash Ledger (Manager only)
+      // 5. Fetch Company Cash Summary (SECURITY DEFINER RPC for all active company members: Manager & Agent)
+      const { data: sumData, error: sumErr } = await (supabase as any).rpc('get_company_cash_summary');
+      if (!sumErr && sumData && (sumData as any[]).length > 0) {
+        const summary = (sumData as any[])[0];
+        setCompanyCashSummary({
+          cashInHand: Number(summary.cash_in_hand || 0),
+          totalOutFlow: Number(summary.total_out_flow || 0),
+          totalAdded: Number(summary.total_added || 0),
+          totalDecreased: Number(summary.total_decreased || 0),
+          totalDisbursed: Number(summary.total_disbursed || 0),
+          totalCollected: Number(summary.total_collected || 0),
+          totalDeducted: Number(summary.total_deducted || 0),
+        });
+      }
+
+      // 6. Fetch Raw Cash Ledger Rows (Manager only for audit breakdown modals)
       if (currentUser.role === 'manager') {
         const { data: cData, error: cErr } = await (supabase as any)
           .from('company_cash_ledger')
@@ -551,7 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fetchCloudData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_cash_ledger' }, () => {
-        if (currentUser.role === 'manager') fetchCloudData();
+        fetchCloudData();
       })
       .subscribe();
 
@@ -1629,6 +1654,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getCashInHand = (): number => {
+    if (isCloudAuth && companyCashSummary !== null) {
+      return companyCashSummary.cashInHand;
+    }
     const inflows = cashLedger
       .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED' || e.transactionType === 'DEDUCTED_AMOUNT')
       .reduce((sum, e) => sum + e.amount, 0);
@@ -1639,6 +1667,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getTotalOutFlow = (): number => {
+    if (isCloudAuth && companyCashSummary !== null) {
+      return companyCashSummary.totalOutFlow;
+    }
     const loanDisbursed = cashLedger
       .filter(e => e.transactionType === 'LOAN_DISBURSED')
       .reduce((sum, e) => sum + e.amount, 0);

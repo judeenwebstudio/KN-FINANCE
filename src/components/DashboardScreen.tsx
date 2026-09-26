@@ -108,46 +108,9 @@ export const DashboardScreen: React.FC = () => {
   const collectedToday = getTodayCollectedAmount();
   const dueTodayCount = getTodayDueCount();
 
-  // Manager financial totals from company cash ledger
-  const managerCashInHand = getCashInHand();
-  const managerOutFlow = getTotalOutFlow();
-
-  // Agent financial totals strictly scoped to logged-in Agent's assigned borrowers
-  const agentFinancials = useMemo(() => {
-    const agentBorrowers = roleScopedBorrowers;
-
-    const agentLoanDisbursed = agentBorrowers.reduce(
-      (sum, b) => sum + (b.loanAmount || b.amount || 0),
-      0
-    );
-
-    const agentDeductedAmount = agentBorrowers.reduce(
-      (sum, b) => sum + (b.deductedAmount || 0),
-      0
-    );
-
-    const agentPaymentsCollected = agentBorrowers.reduce(
-      (sum, b) => sum + getBorrowerPaidAmount(b.id),
-      0
-    );
-
-    // Agent Cash in Hand = Inflows (Payments + Deductions) - Outflows (Loans)
-    const agentCashInHand = agentPaymentsCollected + agentDeductedAmount - agentLoanDisbursed;
-
-    // Agent Out Flow = MAX(0, Loans Disbursed - Payments Collected)
-    const agentOutFlow = Math.max(0, agentLoanDisbursed - agentPaymentsCollected);
-
-    return {
-      agentLoanDisbursed,
-      agentDeductedAmount,
-      agentPaymentsCollected,
-      agentCashInHand,
-      agentOutFlow,
-    };
-  }, [roleScopedBorrowers, payments, getBorrowerPaidAmount]);
-
-  const displayCashInHand = currentRole === 'manager' ? managerCashInHand : agentFinancials.agentCashInHand;
-  const displayOutFlow = currentRole === 'manager' ? managerOutFlow : agentFinancials.agentOutFlow;
+  // Company-wide authoritative financial totals
+  const cashInHand = getCashInHand();
+  const outFlow = getTotalOutFlow();
 
   // Agent Commission calculation:
   // - Manager: Sums agent commission across all company borrowers assigned to an agent (active + closed)
@@ -312,7 +275,7 @@ export const DashboardScreen: React.FC = () => {
                   Cash in Hand
                 </span>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  {currentRole === 'manager' ? 'Available Company Cash' : 'Assigned Borrowers Cash'}
+                  Available Company Cash
                 </p>
               </div>
               <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
@@ -320,7 +283,7 @@ export const DashboardScreen: React.FC = () => {
               </div>
             </div>
             <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
-              ₹{displayCashInHand.toLocaleString('en-IN')}
+              ₹{cashInHand.toLocaleString('en-IN')}
             </div>
           </div>
 
@@ -348,7 +311,7 @@ export const DashboardScreen: React.FC = () => {
                   Out Flow
                 </span>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  {currentRole === 'manager' ? 'Total Loans & Reductions' : 'Assigned Loans & Reductions'}
+                  Total Loans &amp; Reductions
                 </p>
               </div>
               <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-all shadow-sm">
@@ -356,7 +319,7 @@ export const DashboardScreen: React.FC = () => {
               </div>
             </div>
             <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
-              ₹{displayOutFlow.toLocaleString('en-IN')}
+              ₹{outFlow.toLocaleString('en-IN')}
             </div>
           </div>
 
