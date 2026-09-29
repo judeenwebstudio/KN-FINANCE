@@ -56,7 +56,14 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     collectionLines,
     updateBorrower,
     currentRole,
+    currentUser,
   } = useApp();
+
+  const isAssigned = (
+    Boolean(borrower?.agentId && currentUser?.companyUserId && borrower.agentId === currentUser.companyUserId) ||
+    Boolean(borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+  );
+  const canEdit = currentRole === 'manager' || (currentRole === 'agent' && isAssigned);
 
   // Active collection lines for borrower assignment
   const activeLines = useMemo(
@@ -334,8 +341,8 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     e.preventDefault();
     setSubmitError(null);
 
-    if (currentRole !== 'manager') {
-      setSubmitError('Access denied: Only company Managers can edit borrower details.');
+    if (!canEdit) {
+      setSubmitError('Access denied: You do not have permission to edit this borrower.');
       return;
     }
 
@@ -387,7 +394,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
       monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
       collectionLine: collectionLine.trim() || undefined,
       collectionMethod,
-      agentId: selectedAgentId || undefined,
+      agentId: currentRole === 'manager' ? (selectedAgentId || undefined) : borrower.agentId,
       agentCommission: commissionVal,
       loanAmount: loanVal,
       deductedAmount: deductedVal,
@@ -603,25 +610,34 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
                 {/* Assigned Agent */}
                 <div>
                   <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Assigned Agent
+                    Assigned Agent {currentRole === 'agent' && <span className="text-slate-400 font-normal">(Locked)</span>}
                   </label>
-                  <select
-                    value={selectedAgentId}
-                    onChange={(e) => handleAgentChange(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
-                  >
-                    <option value="">Unassigned (Manager Collects)</option>
-                    {activeAgents.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.fullName}
-                      </option>
-                    ))}
-                    {inactiveAssignedAgent && (
-                      <option value={inactiveAssignedAgent.id}>
-                        {inactiveAssignedAgent.fullName} (Inactive)
-                      </option>
-                    )}
-                  </select>
+                  {currentRole === 'agent' ? (
+                    <input
+                      type="text"
+                      disabled
+                      value={borrower.assignedAgent || currentUser?.fullName || 'Assigned to You'}
+                      className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-500 cursor-not-allowed"
+                    />
+                  ) : (
+                    <select
+                      value={selectedAgentId}
+                      onChange={(e) => handleAgentChange(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
+                    >
+                      <option value="">Unassigned (Manager Collects)</option>
+                      {activeAgents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.fullName}
+                        </option>
+                      ))}
+                      {inactiveAssignedAgent && (
+                        <option value={inactiveAssignedAgent.id}>
+                          {inactiveAssignedAgent.fullName} (Inactive)
+                        </option>
+                      )}
+                    </select>
+                  )}
                 </div>
               </div>
             </div>
