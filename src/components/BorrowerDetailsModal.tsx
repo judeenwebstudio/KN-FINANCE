@@ -42,6 +42,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   onClose,
 }) => {
   useModalBackHandler(isOpen, onClose);
+
   const { borrowers, payments, manager, agents, addPayment, settings, currentUser, currentRole } = useApp();
 
   // Find fresh borrower record by ID so state is reactive to changes
@@ -452,6 +453,13 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3.5 gap-x-6 text-xs sm:text-sm">
+                <div>
+                  <span className="text-slate-400 block text-[11px] font-medium">Book No</span>
+                  <span className="font-semibold text-[#1e293b]">
+                    {borrower.bookNo !== null && borrower.bookNo !== undefined ? borrower.bookNo : '—'}
+                  </span>
+                </div>
+
                 <div>
                   <span className="text-slate-400 block text-[11px] font-medium">Borrower Name</span>
                   <span className="font-semibold text-[#1e293b]">

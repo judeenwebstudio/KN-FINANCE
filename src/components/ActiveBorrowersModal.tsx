@@ -1,27 +1,29 @@
 import React, { useRef } from 'react';
 import { Image as ImageIcon, Printer, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { useModalBackHandler } from '../utils/useModalBackHandler';
 import type { Borrower } from '../types';
 import { resolveAgentName } from '../utils/agentUtils';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface ActiveBorrowersModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectBorrower?: (borrowerId: string) => void;
+  selectedLine?: string;
 }
 
 export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
   isOpen,
   onClose,
   onSelectBorrower,
+  selectedLine,
 }) => {
   useModalBackHandler(isOpen, onClose);
+
   const {
     borrowers,
     currentRole,
     currentUser,
-    timeframe,
     company,
     agents,
     getBorrowerPaidAmount,
@@ -43,13 +45,26 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         )
       : borrowers;
 
-  // Filter active borrowers for the currently selected Finance Type
-  const activeBorrowers = roleScopedBorrowers.filter(
-    (b) => (b.financeType || 'Daily') === timeframe && b.status === 'active'
-  );
+  // Filter all active borrowers for current role scope & selected line filter
+  const activeBorrowers = roleScopedBorrowers.filter((b) => {
+    if (b.status !== 'active') return false;
+
+    // Line filter ('All Lines' shows all; specific line requires trimmed case-insensitive match)
+    if (selectedLine && selectedLine !== 'All Lines') {
+      const bLine = b.collectionLine ? b.collectionLine.trim().toLowerCase() : '';
+      const sLine = selectedLine.trim().toLowerCase();
+      if (!bLine || bLine !== sLine) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   const borrowerCount = activeBorrowers.length;
-  const countLabel = `${borrowerCount} ${borrowerCount === 1 ? 'borrower' : 'borrowers'}`;
+  const countLabel = `${borrowerCount} ${borrowerCount === 1 ? 'borrower' : 'borrowers'}${
+    selectedLine && selectedLine !== 'All Lines' ? ` • ${selectedLine}` : ''
+  }`;
 
   // Helper row calculations using shared payment helpers
   const getBorrowerRowData = (b: Borrower) => {
@@ -58,11 +73,13 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
     const pending = Math.max(0, totalLoan - paid);
     const lastPayment = getBorrowerLastPaymentDate(b.id);
     const agentName = resolveAgentName(b, agents);
+    const line = b.collectionLine?.trim() || '—';
 
     return {
       id: b.id,
       name: b.borrowerName || b.name,
       agentName,
+      line,
       totalLoan,
       paid,
       pending,
@@ -117,7 +134,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
 
     ctx.fillStyle = '#64748b';
     ctx.font = '500 14px system-ui, sans-serif';
-    ctx.fillText(`${timeframe} Finance • ${countLabel}`, 40, 114);
+    ctx.fillText(`Active Borrowers • ${countLabel}`, 40, 114);
 
     // Table Header Background
     let currentY = headerHeight;
@@ -130,14 +147,15 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
     ctx.strokeRect(40, currentY, width - 80, tableHeaderHeight);
 
     // Table Columns Coordinates
-    const colX = [60, 310, 490, 670, 830];
+    const colX = [60, 240, 420, 580, 720, 860];
     ctx.fillStyle = '#475569';
     ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.fillText('NAME', colX[0], currentY + 27);
-    ctx.fillText('TOTAL LOAN', colX[1], currentY + 27);
-    ctx.fillText('PAID', colX[2], currentY + 27);
-    ctx.fillText('PENDING', colX[3], currentY + 27);
-    ctx.fillText('LAST PAYMENT', colX[4], currentY + 27);
+    ctx.fillText('LINE', colX[1], currentY + 27);
+    ctx.fillText('TOTAL LOAN', colX[2], currentY + 27);
+    ctx.fillText('PAID', colX[3], currentY + 27);
+    ctx.fillText('PENDING', colX[4], currentY + 27);
+    ctx.fillText('LAST PAYMENT', colX[5], currentY + 27);
 
     currentY += tableHeaderHeight;
 
@@ -161,17 +179,22 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         ctx.font = '600 13px system-ui, sans-serif';
         ctx.fillText(r.name, colX[0], currentY + 27);
 
+        ctx.fillStyle = '#475569';
         ctx.font = '500 13px system-ui, sans-serif';
-        ctx.fillText(`₹${r.totalLoan.toLocaleString('en-IN')}`, colX[1], currentY + 27);
-        ctx.fillText(`₹${r.paid.toLocaleString('en-IN')}`, colX[2], currentY + 27);
+        ctx.fillText(r.line, colX[1], currentY + 27);
+
+        ctx.fillStyle = '#334155';
+        ctx.font = '500 13px system-ui, sans-serif';
+        ctx.fillText(`₹${r.totalLoan.toLocaleString('en-IN')}`, colX[2], currentY + 27);
+        ctx.fillText(`₹${r.paid.toLocaleString('en-IN')}`, colX[3], currentY + 27);
 
         ctx.fillStyle = '#4f46e5';
         ctx.font = 'bold 13px system-ui, sans-serif';
-        ctx.fillText(`₹${r.pending.toLocaleString('en-IN')}`, colX[3], currentY + 27);
+        ctx.fillText(`₹${r.pending.toLocaleString('en-IN')}`, colX[4], currentY + 27);
 
         ctx.fillStyle = '#64748b';
         ctx.font = '500 13px system-ui, sans-serif';
-        ctx.fillText(r.lastPayment, colX[4], currentY + 27);
+        ctx.fillText(r.lastPayment, colX[5], currentY + 27);
 
         currentY += rowHeight;
       });
@@ -187,7 +210,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
 
     // Trigger Download
     const link = document.createElement('a');
-    link.download = `KN_FINANCE_Active_Borrowers_${timeframe}.png`;
+    link.download = 'KN_FINANCE_Active_Borrowers.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -207,9 +230,6 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
               <h2 className="text-xl font-bold tracking-tight text-[#1e293b]">
                 Active Borrowers
               </h2>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold tracking-wide rounded bg-[#eef2ff] text-[#4f46e5]">
-                {timeframe}
-              </span>
             </div>
             <p className="text-xs sm:text-sm font-medium text-[#64748b] mt-0.5">
               {countLabel}
@@ -257,21 +277,22 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         <div className="hidden print:block px-6 pt-4 pb-2 border-b border-slate-200">
           <h1 className="text-2xl font-bold text-[#4f46e5]">{company?.companyName || 'KN FINANCE'}</h1>
           <p className="text-sm text-slate-600">
-            Active Borrowers Report • {timeframe} Finance • {countLabel}
+            Active Borrowers Report • {countLabel}
           </p>
         </div>
 
         {/* Modal Body / Table Area */}
         <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6">
-          <div className="min-w-[620px] sm:min-w-full rounded-xl border border-slate-200/80 overflow-hidden bg-white shadow-sm">
+          <div className="min-w-[700px] sm:min-w-full rounded-xl border border-slate-200/80 overflow-hidden bg-white shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] sm:text-xs font-bold text-[#475569] tracking-wider uppercase">
-                  <th className="py-3 px-4 sm:px-5">NAME</th>
-                  <th className="py-3 px-4 sm:px-5">TOTAL LOAN</th>
-                  <th className="py-3 px-4 sm:px-5">PAID</th>
-                  <th className="py-3 px-4 sm:px-5">PENDING</th>
-                  <th className="py-3 px-4 sm:px-5">LAST PAYMENT</th>
+                  <th className="py-3 px-3.5 sm:px-4">NAME</th>
+                  <th className="py-3 px-3.5 sm:px-4">LINE</th>
+                  <th className="py-3 px-3.5 sm:px-4">TOTAL LOAN</th>
+                  <th className="py-3 px-3.5 sm:px-4">PAID</th>
+                  <th className="py-3 px-3.5 sm:px-4">PENDING</th>
+                  <th className="py-3 px-3.5 sm:px-4">LAST PAYMENT</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
@@ -279,7 +300,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
                   /* Empty State: Keep headers visible, show exact empty text */
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="py-12 px-4 text-center text-[#64748b] font-medium"
                     >
                       No active borrowers found.
@@ -298,7 +319,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
                       }`}
                       title={onSelectBorrower ? 'Click to view borrower details' : undefined}
                     >
-                      <td className={`py-3.5 px-4 sm:px-5 font-semibold text-[#1e293b] ${onSelectBorrower ? 'group-hover:text-[#4f46e5]' : ''} transition-colors`}>
+                      <td className={`py-3.5 px-3.5 sm:px-4 font-semibold text-[#1e293b] ${onSelectBorrower ? 'group-hover:text-[#4f46e5]' : ''} transition-colors`}>
                         <div>{r.name}</div>
                         {r.agentName && (
                           <div className="text-[11px] font-normal text-[#64748b]">
@@ -306,16 +327,19 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
                           </div>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 sm:px-5 text-[#334155] font-medium">
+                      <td className="py-3.5 px-3.5 sm:px-4 text-[#334155] font-medium">
+                        {r.line}
+                      </td>
+                      <td className="py-3.5 px-3.5 sm:px-4 text-[#334155] font-medium">
                         ₹{r.totalLoan.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4 sm:px-5 text-[#334155] font-medium">
+                      <td className="py-3.5 px-3.5 sm:px-4 text-[#334155] font-medium">
                         ₹{r.paid.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4 sm:px-5 font-bold text-[#4f46e5]">
+                      <td className="py-3.5 px-3.5 sm:px-4 font-bold text-[#4f46e5]">
                         ₹{r.pending.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4 sm:px-5 text-[#64748b] font-medium">
+                      <td className="py-3.5 px-3.5 sm:px-4 text-[#64748b] font-medium">
                         {r.lastPayment}
                       </td>
                     </tr>

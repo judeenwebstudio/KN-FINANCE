@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Wallet,
   TrendingDown,
+  BadgePercent,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { type DashboardLineFilter } from '../types';
@@ -33,7 +34,6 @@ export const DashboardScreen: React.FC = () => {
     payments,
     agents,
     settings,
-    timeframe,
     collectionLines,
     borrowerFilter,
     setBorrowerFilter,
@@ -99,18 +99,39 @@ export const DashboardScreen: React.FC = () => {
       )
     : borrowers;
 
-  // Filter borrowers by the selected timeframe for Summary Cards
-  const timeframeBorrowers = roleScopedBorrowers.filter((b) => (b.financeType || 'Daily') === timeframe);
+  const activeRoleScopedBorrowers = roleScopedBorrowers.filter((b) => b.status === 'active');
 
-  // Metrics calculated for top summary cards (Preserved canonical logic)
-  const activeCount = timeframeBorrowers.filter((b) => b.status === 'active').length;
-  const totalLoaned = timeframeBorrowers
-    .filter((b) => b.status === 'active')
+  // Metrics calculated for summary cards
+  const activeCount = activeRoleScopedBorrowers.length;
+  const totalLoaned = activeRoleScopedBorrowers
     .reduce((acc, curr) => acc + (curr.loanAmount || curr.amount || 0), 0);
-  const collectedToday = getTodayCollectedAmount(timeframe);
-  const dueTodayCount = getTodayDueCount(timeframe);
+  const collectedToday = getTodayCollectedAmount();
+  const dueTodayCount = getTodayDueCount();
+
+  // Company-wide authoritative financial totals
   const cashInHand = getCashInHand();
   const outFlow = getTotalOutFlow();
+
+  // Agent Commission calculation:
+  // - Manager: Sums agent commission across all company borrowers assigned to an agent (active + closed)
+  // - Agent: Sums agent commission only for borrowers assigned to currentUser.companyUserId (active + closed)
+  const agentCommissionTotal = useMemo(() => {
+    if (currentRole === 'agent') {
+      const agentUserId = currentUser?.companyUserId;
+      const agentName = currentUser?.fullName?.toLowerCase();
+      return roleScopedBorrowers
+        .filter((b) =>
+          (agentUserId && b.agentId === agentUserId) ||
+          (!b.agentId && b.assignedAgent && agentName && b.assignedAgent.toLowerCase() === agentName)
+        )
+        .reduce((sum, b) => sum + (b.agentCommission || 0), 0);
+    }
+
+    // Manager scope: all borrowers assigned to an agent
+    return borrowers
+      .filter((b) => Boolean(b.agentId || (b.assignedAgent && b.assignedAgent.trim() !== '')))
+      .reduce((sum, b) => sum + (b.agentCommission || 0), 0);
+  }, [borrowers, roleScopedBorrowers, currentRole, currentUser]);
 
   const todayIso = getTodayIsoDate();
 
@@ -120,9 +141,13 @@ export const DashboardScreen: React.FC = () => {
   // 3. Status filter & Work Queue (Active view shows only borrowers with an actionable due today or overdue)
   // 4. Search query (matches borrower name or phone)
   const filteredBorrowers = roleScopedBorrowers.filter((b) => {
-    // 1. Line filter
-    if (selectedLine !== 'All Lines' && b.collectionLine !== selectedLine) {
-      return false;
+    // 1. Line filter ('All Lines' shows all; specific line requires trimmed case-insensitive match)
+    if (selectedLine && selectedLine !== 'All Lines') {
+      const bLine = b.collectionLine ? b.collectionLine.trim().toLowerCase() : '';
+      const sLine = selectedLine.trim().toLowerCase();
+      if (!bLine || bLine !== sLine) {
+        return false;
+      }
     }
 
     // 2. Status & Work Queue filter
@@ -134,12 +159,17 @@ export const DashboardScreen: React.FC = () => {
       if (b.status !== 'closed') return false;
     }
 
-    // 3. Search query (name or phone)
+    // 3. Search query (name, phone, or book no)
     const query = searchQuery.trim().toLowerCase();
     if (query !== '') {
       const nameStr = (b.borrowerName || b.name || '').toLowerCase();
       const phoneStr = (b.phoneNumber || b.phone || '');
-      const matchesSearch = nameStr.includes(query) || phoneStr.includes(query);
+      const bookNoStr = b.bookNo !== null && b.bookNo !== undefined ? String(b.bookNo) : '';
+      const matchesSearch =
+        nameStr.includes(query) ||
+        phoneStr.includes(query) ||
+        bookNoStr === query ||
+        bookNoStr.includes(query);
       if (!matchesSearch) return false;
     }
 
@@ -219,68 +249,90 @@ export const DashboardScreen: React.FC = () => {
 
       {/* Main Content Area - Responsive Container max-width 1200px - 1400px */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-        {/* TOP ROW — PRIMARY FINANCIAL CARDS (Manager Only, 2-column prominent desktop layout) */}
-        {currentRole === 'manager' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-            {/* CARD 1: Cash in Hand (Clickable to open Cash in Hand Modal) */}
-            <div
-              onClick={() => setIsCashInHandModalOpen(true)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setIsCashInHandModalOpen(true);
-                }
-              }}
-              className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-emerald-100/80 hover:border-emerald-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-emerald-700/80 group-hover:text-emerald-700 transition-colors">
-                    Cash in Hand
-                  </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Available Company Cash</p>
-                </div>
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
-                  <Wallet size={22} />
-                </div>
+        {/* TOP ROW — PRIMARY FINANCIAL CARDS (Manager & Agent, 3-column prominent desktop layout) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {/* CARD 1: Cash in Hand */}
+          <div
+            onClick={() => setIsCashInHandModalOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                setIsCashInHandModalOpen(true);
+              }
+            }}
+            className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-emerald-100/80 hover:border-emerald-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-emerald-700/80 group-hover:text-emerald-700 transition-colors">
+                  Cash in Hand
+                </span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Available Company Cash
+                </p>
               </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
-                ₹{cashInHand.toLocaleString('en-IN')}
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
+                <Wallet size={22} />
               </div>
             </div>
-
-            {/* CARD 2: Out Flow (Clickable to open Out Flow Breakdown Modal) */}
-            <div
-              onClick={() => setIsOutFlowModalOpen(true)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setIsOutFlowModalOpen(true);
-                }
-              }}
-              className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-rose-100/80 hover:border-rose-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-rose-700/80 group-hover:text-rose-700 transition-colors">
-                    Out Flow
-                  </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Total Loans &amp; Reductions</p>
-                </div>
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-all shadow-sm">
-                  <TrendingDown size={22} />
-                </div>
-              </div>
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
-                ₹{outFlow.toLocaleString('en-IN')}
-              </div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
+              ₹{cashInHand.toLocaleString('en-IN')}
             </div>
           </div>
-        )}
 
-        {/* SECOND ROW — OPERATIONAL CARDS (4-column layout on desktop, 2x2 on mobile/tablet) */}
+          {/* CARD 2: Out Flow */}
+          <div
+            onClick={() => setIsOutFlowModalOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                setIsOutFlowModalOpen(true);
+              }
+            }}
+            className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-rose-100/80 hover:border-rose-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-rose-700/80 group-hover:text-rose-700 transition-colors">
+                  Out Flow
+                </span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Total Loans &amp; Reductions
+                </p>
+              </div>
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-all shadow-sm">
+                <TrendingDown size={22} />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
+              ₹{outFlow.toLocaleString('en-IN')}
+            </div>
+          </div>
+
+          {/* CARD 3: Agent Commission */}
+          <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-indigo-100/80 hover:border-indigo-300 hover:shadow-lg transition-all flex flex-col justify-between group">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-[#4f46e5] group-hover:text-[#4338ca] transition-colors">
+                  Agent Commission
+                </span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {currentRole === 'manager' ? 'Total Company Agent Commissions' : 'My Total Commission'}
+                </p>
+              </div>
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-50 text-[#4f46e5] flex items-center justify-center shrink-0 group-hover:bg-[#4f46e5] group-hover:text-white transition-all shadow-sm">
+                <BadgePercent size={22} />
+              </div>
+            </div>
+            <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#1e293b] tracking-tight">
+              ₹{agentCommissionTotal.toLocaleString('en-IN')}
+            </div>
+          </div>
+        </div>
+
+        {/* SECOND ROW — OPERATIONAL SUMMARY CARDS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-5">
           {/* CARD 1: Active Borrowers (Clickable to open Active Borrowers Modal) */}
           <div
@@ -395,7 +447,7 @@ export const DashboardScreen: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name or phone..."
+              placeholder="Search by name, phone, or Book No..."
               className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-slate-50/60 text-xs sm:text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:bg-white transition-all"
             />
           </div>
@@ -427,15 +479,13 @@ export const DashboardScreen: React.FC = () => {
               </button>
             </div>
 
-            {currentRole === 'manager' && (
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(true)}
-                className="h-10 px-4 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-              >
-                + Add Borrower
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="h-10 px-4 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+            >
+              + Add Borrower
+            </button>
           </div>
         </div>
 
@@ -445,6 +495,7 @@ export const DashboardScreen: React.FC = () => {
             <table className="w-full text-left border-collapse min-w-[760px]">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] sm:text-xs font-bold text-[#475569] tracking-wider uppercase">
+                  <th className="py-3.5 px-4 sm:px-6">BOOK NO</th>
                   <th className="py-3.5 px-4 sm:px-6">BORROWER</th>
                   <th className="py-3.5 px-4 sm:px-6">PHONE</th>
                   <th className="py-3.5 px-4 sm:px-6">LINE</th>
@@ -459,7 +510,7 @@ export const DashboardScreen: React.FC = () => {
                   /* Empty State: Keep headers visible, show exact empty text */
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-12 px-4 text-center text-[#64748b] font-medium"
                     >
                       No borrowers found.
@@ -479,9 +530,22 @@ export const DashboardScreen: React.FC = () => {
                     return (
                       <tr
                         key={borrower.id}
-                        className="hover:bg-slate-50/60 transition-colors"
+                        onClick={() => setSelectedBorrowerId(borrower.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedBorrowerId(borrower.id);
+                          }
+                        }}
+                        className="hover:bg-indigo-50/40 cursor-pointer transition-colors group focus:outline-none focus:bg-indigo-50/60"
+                        title="Click to view borrower details"
                       >
-                        <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b]">
+                        <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium">
+                          {borrower.bookNo !== null && borrower.bookNo !== undefined ? borrower.bookNo : '—'}
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 font-semibold text-[#1e293b] group-hover:text-[#4f46e5] transition-colors">
                           {borrower.borrowerName || borrower.name}
                         </td>
                         <td className="py-3.5 px-4 sm:px-6 text-[#475569]">
@@ -513,8 +577,24 @@ export const DashboardScreen: React.FC = () => {
                         <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium whitespace-nowrap">
                           {formattedDueDate}
                         </td>
-                        <td className="py-3.5 px-4 sm:px-6 text-right font-bold text-[#4f46e5]">
-                          ₹{pending.toLocaleString('en-IN')}
+                        <td className="py-3.5 px-4 sm:px-6 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsActiveBorrowersModalOpen(true);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.stopPropagation();
+                              }
+                            }}
+                            className="inline-flex items-center justify-end font-bold text-[#4f46e5] hover:text-[#4338ca] hover:underline focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/40 rounded px-1.5 py-0.5 -mr-1.5 transition-colors cursor-pointer"
+                            title="Click to view all Active Borrowers"
+                            aria-label={`Pending amount ₹${pending.toLocaleString('en-IN')}, click to view active borrowers`}
+                          >
+                            ₹{pending.toLocaleString('en-IN')}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -537,6 +617,7 @@ export const DashboardScreen: React.FC = () => {
         isOpen={isActiveBorrowersModalOpen}
         onClose={() => setIsActiveBorrowersModalOpen(false)}
         onSelectBorrower={(borrowerId) => setSelectedBorrowerId(borrowerId)}
+        selectedLine={selectedLine}
       />
 
       {/* Collections Modal */}
@@ -564,19 +645,15 @@ export const DashboardScreen: React.FC = () => {
         onClose={() => setSelectedBorrowerId(null)}
       />
 
-      {/* Cash In Hand Modal (Manager only) */}
-      {currentRole === 'manager' && (
-        <>
-          <CashInHandModal
-            isOpen={isCashInHandModalOpen}
-            onClose={() => setIsCashInHandModalOpen(false)}
-          />
-          <OutFlowModal
-            isOpen={isOutFlowModalOpen}
-            onClose={() => setIsOutFlowModalOpen(false)}
-          />
-        </>
-      )}
+      {/* Cash In Hand & Out Flow Modals (Manager & Agent) */}
+      <CashInHandModal
+        isOpen={isCashInHandModalOpen}
+        onClose={() => setIsCashInHandModalOpen(false)}
+      />
+      <OutFlowModal
+        isOpen={isOutFlowModalOpen}
+        onClose={() => setIsOutFlowModalOpen(false)}
+      />
     </div>
   );
 };

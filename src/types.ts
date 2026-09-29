@@ -73,6 +73,7 @@ export const COLLECTION_METHODS: CollectionMethod[] = [
 
 export interface Borrower {
   id: string;
+  bookNo?: number | null;
   name: string;
   borrowerName: string;
   phone: string;
@@ -104,6 +105,7 @@ export interface Borrower {
 }
 
 export type NewBorrowerInput = {
+  bookNo?: number | null;
   borrowerName: string;
   phoneNumber: string;
   alternatePhoneNumber?: string;
@@ -219,9 +221,11 @@ export type CashTransactionType =
   | 'CASH_ADDED'
   | 'CASH_DECREASED'
   | 'LOAN_DISBURSED'
-  | 'PAYMENT_COLLECTED';
+  | 'PAYMENT_COLLECTED'
+  | 'DEDUCTED_AMOUNT'
+  | 'AGENT_COMMISSION';
 
-export type CashSourceType = 'MANUAL' | 'LOAN' | 'PAYMENT';
+export type CashSourceType = 'MANUAL' | 'LOAN' | 'PAYMENT' | 'COMMISSION' | 'DEDUCTION';
 
 export interface CashLedgerEntry {
   id: string;

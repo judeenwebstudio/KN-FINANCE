@@ -18,9 +18,25 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
-import { loginWithPin, restoreCloudSession, signOutOfCloud } from '../lib/authService';
+import {
+  loginWithPin,
+  restoreCloudSession,
+  signOutOfCloud,
+  createCloudAgent,
+  setCloudAgentStatus,
+} from '../lib/authService';
 
 export type { NewBorrowerInput };
+
+export interface CompanyCashSummary {
+  cashInHand: number;
+  totalOutFlow: number;
+  totalAdded: number;
+  totalDecreased: number;
+  totalDisbursed: number;
+  totalCollected: number;
+  totalDeducted: number;
+}
 
 export interface DueBorrowerItem {
   borrower: Borrower;
@@ -43,6 +59,7 @@ interface AppContextType {
   payments: PaymentRecord[];
   activityLogs: ActivityLogEntry[];
   cashLedger: CashLedgerEntry[];
+  companyCashSummary: CompanyCashSummary | null;
   timeframe: Timeframe;
   borrowerFilter: BorrowerFilter;
   searchQuery: string;
@@ -56,7 +73,7 @@ interface AppContextType {
   updateCompany: (data: CompanyProfile) => void;
   addAgent: (data: { fullName: string; mobile: string; pin: string }) => Promise<{ success: boolean; error?: string }>;
   updateAgent: (id: string, data: { fullName?: string; mobile?: string; pin?: string; status?: 'active' | 'inactive' }) => Promise<{ success: boolean; error?: string }>;
-  toggleAgentStatus: (id: string) => void;
+  toggleAgentStatus: (id: string) => Promise<{ success: boolean; error?: string }>;
   addCollectionLine: (name: string) => Promise<{ success: boolean; error?: string }>;
   updateCollectionLine: (id: string, newName: string) => Promise<{ success: boolean; error?: string }>;
   toggleCollectionLineStatus: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -72,9 +89,9 @@ interface AppContextType {
   decreaseManualCash: (amount: number, note?: string) => void;
   getBorrowerPaidAmount: (borrowerId: string) => number;
   getBorrowerLastPaymentDate: (borrowerId: string) => string;
-  getTodayCollectedAmount: (tf: Timeframe) => number;
-  getDueBorrowersForDate: (targetDateIso: string, tf: Timeframe) => DueBorrowerItem[];
-  getTodayDueCount: (tf: Timeframe) => number;
+  getTodayCollectedAmount: (tf?: Timeframe) => number;
+  getDueBorrowersForDate: (targetDateIso: string, tf?: Timeframe) => DueBorrowerItem[];
+  getTodayDueCount: (tf?: Timeframe) => number;
   settings: AppSettings;
   updateSettings: (partial: Partial<AppSettings>) => void;
   resetSettings: () => void;
@@ -119,6 +136,7 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
 
   return {
     id: row.id,
+    bookNo: row.book_no !== null && row.book_no !== undefined ? Number(row.book_no) : null,
     name: borrowerName,
     borrowerName: borrowerName,
     phone: phoneVal,
@@ -416,6 +434,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  const [companyCashSummary, setCompanyCashSummary] = useState<{
+    cashInHand: number;
+    totalOutFlow: number;
+    totalAdded: number;
+    totalDecreased: number;
+    totalDisbursed: number;
+    totalCollected: number;
+    totalDeducted: number;
+  } | null>(null);
+
   useEffect(() => {
     try {
       if (!isCloudAuth) {
@@ -431,7 +459,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!supabase || !currentUser) return;
     try {
       // 1. Fetch Agents (Manager gets all agents, Agent gets their own profile)
-      let currentAgentList = agents;
+      let currentAgentList: StoredAgentRecord[] = [];
       const { data: uData, error: uErr } = await (supabase as any)
         .from('company_users')
         .select('*')
@@ -439,27 +467,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('role', 'agent')
         .order('created_at', { ascending: true });
 
-      if (!uErr && uData && (uData as any[]).length > 0) {
-        currentAgentList = (uData as any[]).map(u => ({
-          id: u.id,
-          fullName: u.full_name,
-          mobile: u.mobile,
-          role: 'agent' as const,
-          status: u.status as 'active' | 'inactive',
-          createdAt: u.created_at,
-          pinHash: '',
-        }));
-        setAgents(currentAgentList);
-      } else if (currentUser.role === 'agent') {
-        currentAgentList = [{
-          id: currentUser.companyUserId,
-          fullName: currentUser.fullName,
-          mobile: currentUser.mobile,
-          role: 'agent' as const,
-          status: 'active' as const,
-          createdAt: new Date().toISOString(),
-          pinHash: '',
-        }];
+      if (!uErr && Array.isArray(uData)) {
+        if (currentUser.role === 'agent' && uData.length === 0) {
+          currentAgentList = [{
+            id: currentUser.companyUserId,
+            fullName: currentUser.fullName,
+            mobile: currentUser.mobile,
+            role: 'agent' as const,
+            status: 'active' as const,
+            createdAt: new Date().toISOString(),
+            pinHash: '',
+          }];
+        } else {
+          currentAgentList = uData.map(u => ({
+            id: u.id,
+            fullName: u.full_name,
+            mobile: u.mobile,
+            role: 'agent' as const,
+            status: u.status as 'active' | 'inactive',
+            createdAt: u.created_at,
+            pinHash: '',
+          }));
+        }
         setAgents(currentAgentList);
       }
 
@@ -507,7 +536,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })));
       }
 
-      // 5. Fetch Cash Ledger (Manager only)
+      // 5. Fetch Company Cash Summary (SECURITY DEFINER RPC for all active company members: Manager & Agent)
+      const { data: sumData, error: sumErr } = await (supabase as any).rpc('get_company_cash_summary');
+      if (!sumErr && sumData && (sumData as any[]).length > 0) {
+        const summary = (sumData as any[])[0];
+        setCompanyCashSummary({
+          cashInHand: Number(summary.cash_in_hand || 0),
+          totalOutFlow: Number(summary.total_out_flow || 0),
+          totalAdded: Number(summary.total_added || 0),
+          totalDecreased: Number(summary.total_decreased || 0),
+          totalDisbursed: Number(summary.total_disbursed || 0),
+          totalCollected: Number(summary.total_collected || 0),
+          totalDeducted: Number(summary.total_deducted || 0),
+        });
+      }
+
+      // 6. Fetch Raw Cash Ledger Rows (Manager only for audit breakdown modals)
       if (currentUser.role === 'manager') {
         const { data: cData, error: cErr } = await (supabase as any)
           .from('company_cash_ledger')
@@ -543,7 +587,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fetchCloudData();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'company_cash_ledger' }, () => {
-        if (currentUser.role === 'manager') fetchCloudData();
+        fetchCloudData();
       })
       .subscribe();
 
@@ -795,6 +839,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pin: string;
   }): Promise<{ success: boolean; error?: string }> => {
     const cleanMobile = data.mobile.replace(/\D/g, '');
+
+    if (isCloudAuth && currentUser) {
+      if (currentUser.mobile && currentUser.mobile.replace(/\D/g, '') === cleanMobile) {
+        return { success: false, error: 'Mobile number cannot be the same as the Manager’s mobile number.' };
+      }
+      const duplicate = agents.find((a) => a.mobile.replace(/\D/g, '') === cleanMobile);
+      if (duplicate) {
+        return { success: false, error: 'An agent with this mobile number already exists in your company.' };
+      }
+
+      const res = await createCloudAgent({
+        fullName: data.fullName,
+        mobile: cleanMobile,
+        pin: data.pin,
+      });
+
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to create agent in cloud.' };
+      }
+
+      await fetchCloudData();
+      addActivity({
+        action: 'agent_created',
+        performedByUserId: currentUser.companyUserId,
+        performedByRole: currentUser.role,
+        agentId: res.agent?.id,
+        message: `Agent ${data.fullName.trim()} was added.`,
+      });
+
+      return { success: true };
+    }
+
+    // Local / Offline fallback
     if (manager && manager.mobile.replace(/\D/g, '') === cleanMobile) {
       return { success: false, error: 'Mobile number cannot be the same as the Manager’s mobile number.' };
     }
@@ -831,8 +908,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     id: string,
     data: { fullName?: string; mobile?: string; pin?: string; status?: 'active' | 'inactive' }
   ): Promise<{ success: boolean; error?: string }> => {
-    if (data.mobile) {
-      const cleanMobile = data.mobile.replace(/\D/g, '');
+    const cleanMobile = data.mobile ? data.mobile.replace(/\D/g, '') : undefined;
+
+    if (isCloudAuth && currentUser && supabase) {
+      if (cleanMobile && currentUser.mobile && currentUser.mobile.replace(/\D/g, '') === cleanMobile) {
+        return { success: false, error: 'Mobile number cannot be the same as the Manager’s mobile number.' };
+      }
+      if (cleanMobile) {
+        const duplicate = agents.find((a) => a.id !== id && a.mobile.replace(/\D/g, '') === cleanMobile);
+        if (duplicate) {
+          return { success: false, error: 'Another agent with this mobile number already exists in your company.' };
+        }
+      }
+
+      if (data.pin) {
+        const target = agents.find((a) => a.id === id);
+        const nameToUse = data.fullName?.trim() || target?.fullName || '';
+        const mobileToUse = cleanMobile || target?.mobile || '';
+        const res = await createCloudAgent({
+          fullName: nameToUse,
+          mobile: mobileToUse,
+          pin: data.pin,
+        });
+        if (!res.success) {
+          return { success: false, error: res.error || 'Failed to update agent credentials.' };
+        }
+      } else if (data.fullName !== undefined || cleanMobile !== undefined) {
+        const updatePayload: any = {};
+        if (data.fullName !== undefined) updatePayload.full_name = data.fullName.trim();
+        if (cleanMobile !== undefined) updatePayload.mobile = cleanMobile;
+        const { error: upErr } = await (supabase as any)
+          .from('company_users')
+          .update(updatePayload)
+          .eq('id', id)
+          .eq('company_id', currentUser.companyId);
+
+        if (upErr) {
+          return { success: false, error: upErr.message || 'Failed to update agent in cloud.' };
+        }
+      }
+
+      await fetchCloudData();
+      addActivity({
+        action: 'agent_updated',
+        performedByUserId: currentUser.companyUserId,
+        performedByRole: currentUser.role,
+        agentId: id,
+        message: `Agent ${data.fullName?.trim() || 'details'} was updated.`,
+      });
+
+      return { success: true };
+    }
+
+    // Local / Offline fallback
+    if (cleanMobile) {
       if (manager && manager.mobile.replace(/\D/g, '') === cleanMobile) {
         return { success: false, error: 'Mobile number cannot be the same as the Manager’s mobile number.' };
       }
@@ -853,7 +982,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...agent,
           fullName: data.fullName !== undefined ? data.fullName.trim() : agent.fullName,
-          mobile: data.mobile !== undefined ? data.mobile.replace(/\D/g, '') : agent.mobile,
+          mobile: cleanMobile !== undefined ? cleanMobile : agent.mobile,
           status: data.status !== undefined ? data.status : agent.status,
           pinHash: newPinHash !== undefined ? newPinHash : agent.pinHash,
         };
@@ -871,28 +1000,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true };
   };
 
-  const toggleAgentStatus = (id: string) => {
+  const toggleAgentStatus = async (id: string): Promise<{ success: boolean; error?: string }> => {
     const target = agents.find((a) => a.id === id);
-    if (target) {
-      const isDeactivating = target.status === 'active';
+    if (!target) {
+      return { success: false, error: 'Agent not found' };
+    }
+    const nextStatus: 'active' | 'inactive' = target.status === 'active' ? 'inactive' : 'active';
+
+    if (isCloudAuth && currentUser) {
+      const res = await setCloudAgentStatus(id, nextStatus);
+      if (!res.success) {
+        return { success: false, error: res.error || 'Failed to update agent status in cloud.' };
+      }
+      await fetchCloudData();
       addActivity({
-        action: isDeactivating ? 'agent_deactivated' : 'agent_updated',
-        performedByUserId: null,
-        performedByRole: 'manager',
+        action: nextStatus === 'inactive' ? 'agent_deactivated' : 'agent_updated',
+        performedByUserId: currentUser.companyUserId,
+        performedByRole: currentUser.role,
         agentId: id,
-        message: isDeactivating
+        message: nextStatus === 'inactive'
           ? `Agent ${target.fullName} was deactivated.`
           : `Agent ${target.fullName} was activated.`,
       });
+      return { success: true };
     }
+
+    // Local / Offline fallback
+    addActivity({
+      action: nextStatus === 'inactive' ? 'agent_deactivated' : 'agent_updated',
+      performedByUserId: null,
+      performedByRole: 'manager',
+      agentId: id,
+      message: nextStatus === 'inactive'
+        ? `Agent ${target.fullName} was deactivated.`
+        : `Agent ${target.fullName} was activated.`,
+    });
 
     setAgents((prev) =>
       prev.map((agent) => {
         if (agent.id !== id) return agent;
-        const nextStatus: 'active' | 'inactive' = agent.status === 'active' ? 'inactive' : 'active';
         return { ...agent, status: nextStatus };
       })
     );
+    return { success: true };
   };
 
   const addCollectionLine = async (name: string): Promise<{ success: boolean; error?: string }> => {
@@ -1088,6 +1238,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addBorrower = async (data: NewBorrowerInput): Promise<{ success: boolean; error?: string; borrowerId?: string }> => {
+    const parsedBookNo = data.bookNo !== undefined && data.bookNo !== null ? Number(data.bookNo) : null;
+    const assignedAgentId = (isCloudAuth && currentUser?.role === 'agent')
+      ? currentUser.companyUserId
+      : (data.agentId || null);
+
     if (isCloudAuth && currentUser && supabase) {
       try {
         const startIso = toDbDate(data.startDate) || getTodayIsoDate();
@@ -1097,6 +1252,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .from('borrowers')
           .insert({
             company_id: currentUser.companyId,
+            book_no: parsedBookNo,
             name: data.borrowerName.trim(),
             phone: data.phoneNumber.trim(),
             alternate_phone: data.alternatePhoneNumber?.trim() || null,
@@ -1106,7 +1262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             monthly_collection_day: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
             collection_line: data.collectionLine ? data.collectionLine.trim() : null,
             collection_method: data.collectionMethod ? data.collectionMethod.trim() : null,
-            assigned_agent_id: data.agentId || null,
+            assigned_agent_id: assignedAgentId,
             loan_amount: data.loanAmount,
             deducted_amount: data.deductedAmount,
             agent_commission: Number(data.agentCommission) || 0,
@@ -1125,6 +1281,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (error) {
           console.error('Supabase addBorrower error:', error);
+          if (
+            error.code === '23505' ||
+            (error.message && error.message.includes('idx_borrowers_company_book_no')) ||
+            (error.message && error.message.includes('chk_borrower_book_no_range'))
+          ) {
+            return {
+              success: false,
+              error: `Book No ${parsedBookNo} is already assigned to another borrower. Please select another Book No.`,
+            };
+          }
           return { success: false, error: error.message };
         }
 
@@ -1138,15 +1304,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Local / Offline fallback
+    if (parsedBookNo !== null && borrowers.some(b => b.bookNo === parsedBookNo)) {
+      return {
+        success: false,
+        error: `Book No ${parsedBookNo} is already assigned to another borrower. Please select another Book No.`,
+      };
+    }
+
     const now = new Date().toISOString();
+    const resolvedAgentId = (currentRole === 'agent' && currentUser?.companyUserId)
+      ? currentUser.companyUserId
+      : (data.agentId !== undefined ? data.agentId : null);
+
     const newBorrower: Borrower = {
       id: Date.now().toString(),
+      bookNo: parsedBookNo,
       ...data,
+      netAmountGiven: data.netAmountGiven !== undefined ? data.netAmountGiven : Math.max(0, (Number(data.loanAmount) || 0) - (Number(data.deductedAmount) || 0) - (Number(data.agentCommission) || 0)),
       weeklyCollectionDay: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
       monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
       collectionLine: data.collectionLine ? data.collectionLine.trim() : null,
       collectionMethod: data.collectionMethod ? data.collectionMethod.trim() : null,
-      agentId: data.agentId !== undefined ? data.agentId : null,
+      agentId: resolvedAgentId,
       agentCommission: Number(data.agentCommission) || 0,
       name: data.borrowerName,
       phone: data.phoneNumber,
@@ -1157,19 +1336,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setBorrowers(prev => [newBorrower, ...prev]);
 
-    const netDisbursed = newBorrower.netAmountGiven ?? Math.max(0, (newBorrower.loanAmount || 0) - (newBorrower.deductedAmount || 0) - (newBorrower.agentCommission || 0));
-    if (netDisbursed > 0) {
+    const loanDisbursedAmt = newBorrower.loanAmount || newBorrower.amount || 0;
+    const deductedAmt = newBorrower.deductedAmount || 0;
+
+    if (loanDisbursedAmt > 0) {
       const ledgerEntry: CashLedgerEntry = {
         id: `cash_loan_${newBorrower.id}_${Date.now()}`,
         companyId: currentUser?.companyId,
         transactionType: 'LOAN_DISBURSED',
-        amount: netDisbursed,
+        amount: loanDisbursedAmt,
         sourceType: 'LOAN',
         borrowerId: newBorrower.id,
         borrowerName: newBorrower.borrowerName,
         note: `Loan disbursed to ${newBorrower.borrowerName}`,
         performedByUserId: currentUser?.companyUserId || null,
-        performedByName: currentUser?.fullName || 'Manager',
+        performedByName: currentUser?.fullName || (currentRole === 'agent' ? 'Agent' : 'Manager'),
         createdAt: now,
       };
       setCashLedger(prev => {
@@ -1180,10 +1361,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    if (deductedAmt > 0) {
+      const deductionEntry: CashLedgerEntry = {
+        id: `cash_deduct_${newBorrower.id}_${Date.now()}`,
+        companyId: currentUser?.companyId,
+        transactionType: 'DEDUCTED_AMOUNT',
+        amount: deductedAmt,
+        sourceType: 'DEDUCTION',
+        borrowerId: newBorrower.id,
+        borrowerName: newBorrower.borrowerName,
+        note: `Deducted amount retained for ${newBorrower.borrowerName}`,
+        performedByUserId: currentUser?.companyUserId || null,
+        performedByName: currentUser?.fullName || (currentRole === 'agent' ? 'Agent' : 'Manager'),
+        createdAt: now,
+      };
+      setCashLedger(prev => {
+        if (prev.some(e => e.transactionType === 'DEDUCTED_AMOUNT' && e.borrowerId === newBorrower.id)) {
+          return prev;
+        }
+        return [deductionEntry, ...prev];
+      });
+    }
+
     addActivity({
       action: 'borrower_created',
-      performedByUserId: null,
-      performedByRole: 'manager',
+      performedByUserId: currentUser?.companyUserId || null,
+      performedByRole: currentRole,
       borrowerId: newBorrower.id,
       message: `Borrower ${data.borrowerName.trim()} was added.`,
     });
@@ -1195,6 +1398,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isCloudAuth && currentUser && supabase) {
       try {
         const updatePayload: any = {};
+        if (data.bookNo !== undefined) {
+          updatePayload.book_no = data.bookNo !== null ? Number(data.bookNo) : null;
+        }
         if (data.borrowerName !== undefined) updatePayload.name = data.borrowerName.trim();
         if (data.phoneNumber !== undefined) updatePayload.phone = data.phoneNumber.trim();
         if (data.alternatePhoneNumber !== undefined) updatePayload.alternate_phone = data.alternatePhoneNumber.trim() || null;
@@ -1396,19 +1602,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return formatDisplayDate(latest.paymentDate) || '-';
   };
 
-  const getTodayCollectedAmount = (tf: Timeframe): number => {
+  const getTodayCollectedAmount = (tf?: Timeframe): number => {
     const todayIso = getTodayIsoDate();
     return payments
-      .filter(p => p.paymentDate === todayIso && p.financeType === tf)
+      .filter(p => p.paymentDate === todayIso && (!tf || p.financeType === tf))
       .reduce((sum, p) => sum + p.amount, 0);
   };
 
-  const getDueBorrowersForDate = (targetDateIso: string, tf: Timeframe): DueBorrowerItem[] => {
+  const getDueBorrowersForDate = (targetDateIso: string, tf?: Timeframe): DueBorrowerItem[] => {
     const [y, m, d] = targetDateIso.split('-');
     const targetDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
 
-    const relevantBorrowers = borrowers.filter(
-      (b) => (b.financeType || 'Daily') === tf && b.status === 'active'
+    // Role-scoped borrowers for due calculation
+    const roleScopedList = currentRole === 'agent'
+      ? borrowers.filter(
+          (b) =>
+            b.agentId === currentUser?.companyUserId ||
+            (b.assignedAgent &&
+              currentUser?.fullName &&
+              b.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+        )
+      : borrowers;
+
+    const relevantBorrowers = roleScopedList.filter(
+      (b) => (!tf || (b.financeType || 'Daily') === tf) && b.status === 'active'
     );
 
     const dueItems: DueBorrowerItem[] = [];
@@ -1441,15 +1658,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return dueItems;
   };
 
-  const getTodayDueCount = (tf: Timeframe): number => {
+  const getTodayDueCount = (tf?: Timeframe): number => {
     const todayIso = getTodayIsoDate();
     const dues = getDueBorrowersForDate(todayIso, tf);
     return dues.length;
   };
 
   const getCashInHand = (): number => {
+    if (isCloudAuth && companyCashSummary !== null) {
+      return companyCashSummary.cashInHand;
+    }
     const inflows = cashLedger
-      .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED')
+      .filter(e => e.transactionType === 'CASH_ADDED' || e.transactionType === 'PAYMENT_COLLECTED' || e.transactionType === 'DEDUCTED_AMOUNT')
       .reduce((sum, e) => sum + e.amount, 0);
     const outflows = cashLedger
       .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
@@ -1458,9 +1678,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getTotalOutFlow = (): number => {
-    return cashLedger
-      .filter(e => e.transactionType === 'LOAN_DISBURSED' || e.transactionType === 'CASH_DECREASED')
+    if (isCloudAuth && companyCashSummary !== null) {
+      return companyCashSummary.totalOutFlow;
+    }
+    const loanDisbursed = cashLedger
+      .filter(e => e.transactionType === 'LOAN_DISBURSED')
       .reduce((sum, e) => sum + e.amount, 0);
+    const expenses = cashLedger
+      .filter(e => e.transactionType === 'CASH_DECREASED')
+      .reduce((sum, e) => sum + e.amount, 0);
+    const paymentsCollected = cashLedger
+      .filter(e => e.transactionType === 'PAYMENT_COLLECTED')
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const netLoanOutflow = Math.max(0, loanDisbursed - paymentsCollected);
+    return netLoanOutflow + expenses;
   };
 
   const addManualCash = async (amount: number, note?: string) => {
@@ -1553,6 +1785,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         payments,
         activityLogs,
         cashLedger,
+        companyCashSummary,
         timeframe,
         borrowerFilter,
         searchQuery,

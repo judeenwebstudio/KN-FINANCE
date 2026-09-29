@@ -160,11 +160,14 @@ export function getBorrowerSchedule(borrower: Borrower): ScheduledInstallment[] 
     if (borrower.weeklyCollectionDay && borrower.weeklyCollectionDay >= 1 && borrower.weeklyCollectionDay <= 7) {
       const jsDay = startDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
       const currentDay1to7 = jsDay === 0 ? 7 : jsDay;
-      const daysToAdd = (borrower.weeklyCollectionDay - currentDay1to7 + 7) % 7;
+      let daysToAdd = (borrower.weeklyCollectionDay - currentDay1to7 + 7) % 7;
+      if (daysToAdd === 0) {
+        daysToAdd = 7; // NO installment on Start Date; full 7-day cycle
+      }
       firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + daysToAdd);
     } else {
-      // Legacy fallback: startDate is first installment
-      firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      // Fallback: Week 1 is exactly 7 days after Start Date
+      firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 7);
     }
 
     for (let i = 0; i < durationCount; i++) {

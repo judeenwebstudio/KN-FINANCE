@@ -12,7 +12,8 @@ interface CollectionsModalProps {
 
 export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose }) => {
   useModalBackHandler(isOpen, onClose);
-  const { payments, timeframe, company, manager, agents, settings } = useApp();
+
+  const { payments, company, manager, agents, settings } = useApp();
   const [selectedDateIso, setSelectedDateIso] = useState<string>(getTodayIsoDate());
 
   // Default to today whenever modal opens
@@ -24,9 +25,9 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
 
   if (!isOpen) return null;
 
-  // Filter payments for the selected date and current Finance Type
+  // Filter payments for the selected date
   const filteredPayments = payments.filter(
-    (p) => p.paymentDate === selectedDateIso && (p.financeType || 'Daily') === timeframe
+    (p) => p.paymentDate === selectedDateIso
   );
 
   const totalCollected = filteredPayments.reduce((acc, curr) => acc + curr.amount, 0);
@@ -68,7 +69,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
 
     ctx.fillStyle = '#64748b';
     ctx.font = '500 14px system-ui, sans-serif';
-    ctx.fillText(`${timeframe} Finance • ${formattedDisplay}`, 40, 114);
+    ctx.fillText(`Collections • ${formattedDisplay}`, 40, 114);
 
     // Table Header Background
     let currentY = headerHeight;
@@ -132,7 +133,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
 
     // Download
     const link = document.createElement('a');
-    link.download = `KN_FINANCE_Collections_${timeframe}_${selectedDateIso}.png`;
+    link.download = `KN_FINANCE_Collections_${selectedDateIso}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -151,9 +152,6 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
               <h2 className="text-xl font-bold tracking-tight text-[#1e293b]">
                 Collections
               </h2>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold tracking-wide rounded bg-[#eef2ff] text-[#4f46e5]">
-                {timeframe}
-              </span>
             </div>
 
             {/* Date Selector: [calendar icon] 23 Sept 2026 ▼ */}
@@ -219,7 +217,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
         <div className="hidden print:block px-6 pt-4 pb-2 border-b border-slate-200">
           <h1 className="text-2xl font-bold text-[#4f46e5]">{company?.companyName || 'KN FINANCE'}</h1>
           <p className="text-sm text-slate-600">
-            Collections Report • {timeframe} Finance • {formattedDisplay}
+            Collections Report • {formattedDisplay}
           </p>
         </div>
 

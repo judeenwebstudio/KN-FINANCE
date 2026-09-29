@@ -3,10 +3,10 @@ import { X, Phone, Upload, Trash2, Plus, AlertCircle, FileText, Image as ImageIc
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
-import { calculateBorrowerEndDate } from '../utils/loanCalculations';
-import { useModalBackHandler } from '../utils/useModalBackHandler';
+import { calculateBorrowerEndDate, parseCustomDate } from '../utils/loanCalculations';
 import { COLLECTION_METHODS } from '../types';
 import type { Timeframe, Borrower, NewBorrowerInput, CollectionMethod } from '../types';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface AddBorrowerModalProps {
   isOpen: boolean;
@@ -19,7 +19,20 @@ interface AddBorrowerModalProps {
 const DURATION_OPTIONS: Record<Timeframe, string[]> = {
   Daily: ['30 Days', '50 Days', '60 Days', '90 Days', '100 Days'],
   Weekly: ['10 Weeks', '12 Weeks', '15 Weeks', '20 Weeks'],
-  Monthly: ['1 Month', '2 Months', '3 Months', '6 Months', '9 Months', '12 Months', '24 Months'],
+  Monthly: [
+    '1 Month',
+    '2 Months',
+    '3 Months',
+    '4 Months',
+    '5 Months',
+    '6 Months',
+    '7 Months',
+    '8 Months',
+    '9 Months',
+    '10 Months',
+    '11 Months',
+    '12 Months',
+  ],
 };
 
 // Helper to get today in YYYY-MM-DD for <input type="date">
@@ -38,7 +51,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   onUpdate,
 }) => {
   useModalBackHandler(isOpen, onClose);
-  const { addBorrower, timeframe, agents, settings, collectionLines, currentUser, isCloudAuth } = useApp();
+
+  const { addBorrower, timeframe, borrowers, agents, settings, collectionLines, currentUser, currentRole, isCloudAuth } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active collection lines for borrower assignment
@@ -51,6 +65,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const defaultType = settings?.defaultFinanceType || timeframe || 'Daily';
 
   // Form Fields
+  const [bookNo, setBookNo] = useState<string>('');
   const [borrowerName, setBorrowerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [alternatePhoneNumber, setAlternatePhoneNumber] = useState('');
@@ -78,6 +93,18 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Used Book Numbers in current company (excluding the initialBorrower being edited, if any)
+  const usedBookNos = useMemo(() => {
+    const set = new Set<number>();
+    for (const b of borrowers) {
+      if (b.bookNo !== null && b.bookNo !== undefined) {
+        if (initialBorrower && b.id === initialBorrower.id) continue;
+        set.add(b.bookNo);
+      }
+    }
+    return set;
+  }, [borrowers, initialBorrower]);
+
   // Active agents available for assignment
   const activeAgents = useMemo(() => agents.filter((a) => a.status === 'active'), [agents]);
 
@@ -100,20 +127,26 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (initialBorrower) {
+        setBookNo(initialBorrower.bookNo !== null && initialBorrower.bookNo !== undefined ? String(initialBorrower.bookNo) : '');
         setBorrowerName(initialBorrower.borrowerName || initialBorrower.name || '');
         setPhoneNumber(initialBorrower.phoneNumber || initialBorrower.phone || '');
         setAlternatePhoneNumber(initialBorrower.alternatePhoneNumber || '');
         setAddress(initialBorrower.address || '');
         setFinanceType(initialBorrower.financeType || 'Daily');
-        setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || 1);
-        setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || 1);
+        const parsedStart = parseCustomDate(initialBorrower.startDate);
+        const startDay1to7 = parsedStart ? (parsedStart.getDay() === 0 ? 7 : parsedStart.getDay()) : 1;
+        setWeeklyCollectionDay(initialBorrower.weeklyCollectionDay || startDay1to7);
+        setMonthlyCollectionDay(initialBorrower.monthlyCollectionDay || (parsedStart ? parsedStart.getDate() : 1));
         setCollectionLine(initialBorrower.collectionLine || activeLines[0]?.name || '');
         setCollectionMethod((initialBorrower.collectionMethod as CollectionMethod) || 'Hand Cash');
-        setSelectedAgentId(initialBorrower.agentId || '');
+        const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
+          ? currentUser.companyUserId
+          : (initialBorrower.agentId || '');
+        setSelectedAgentId(targetAgentId);
         setAgentCommission(
           initialBorrower.agentCommission !== undefined
             ? initialBorrower.agentCommission.toString()
-            : (initialBorrower.agentId ? '500' : '0')
+            : (targetAgentId ? '500' : '0')
         );
         setParcelTokenMode(Boolean(initialBorrower.parcelTokenMode));
         setLoanAmount((initialBorrower.loanAmount || initialBorrower.amount || '').toString());
@@ -123,19 +156,26 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setIsExistingLoan(Boolean(initialBorrower.isExistingLoan));
       } else {
         const initialType = settings?.defaultFinanceType || timeframe || 'Daily';
+        const todayIso = getTodayIsoDate();
+        const todayD = new Date();
+        const todayDay1to7 = todayD.getDay() === 0 ? 7 : todayD.getDay();
+        setBookNo('');
         setBorrowerName('');
         setPhoneNumber('');
         setAlternatePhoneNumber('');
         setAddress('');
         setFinanceType(initialType);
-        setWeeklyCollectionDay(1);
-        setMonthlyCollectionDay(1);
+        setWeeklyCollectionDay(todayDay1to7);
+        setMonthlyCollectionDay(todayD.getDate());
         setCollectionLine(activeLines[0]?.name || '');
         setCollectionMethod('Hand Cash');
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
-        setStartDateIso(getTodayIsoDate());
-        setSelectedAgentId('');
+        setStartDateIso(todayIso);
+        const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
+          ? currentUser.companyUserId
+          : '';
+        setSelectedAgentId(targetAgentId);
         setAgentCommission('0');
         setLoanAmount('');
         setDeductedAmount('');
@@ -157,6 +197,13 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     const options = DURATION_OPTIONS[newType];
     if (!options.includes(repaymentDuration)) {
       setRepaymentDuration(options[1] || options[0]);
+    }
+    if (newType === 'Weekly' && !initialBorrower) {
+      const parsed = parseCustomDate(startDateIso);
+      if (parsed) {
+        const jsDay = parsed.getDay();
+        setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
+      }
     }
   };
 
@@ -220,6 +267,15 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
 
+    const numBookNo = parseInt(bookNo, 10);
+    if (!bookNo || isNaN(numBookNo)) {
+      newErrors.bookNo = 'Book No is required';
+    } else if (numBookNo < 1 || numBookNo > 1000) {
+      newErrors.bookNo = 'Book No must be between 1 and 1000';
+    } else if (usedBookNos.has(numBookNo)) {
+      newErrors.bookNo = `Book No ${numBookNo} is already assigned to another borrower. Please select another Book No.`;
+    }
+
     if (!borrowerName.trim()) {
       newErrors.borrowerName = 'Borrower Name is required';
     }
@@ -253,10 +309,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     const commissionVal = parseFloat(agentCommission || '0');
     if (isNaN(commissionVal) || commissionVal < 0) {
       newErrors.agentCommission = 'Agent Commission cannot be negative';
-    } else if (!isNaN(loanVal) && commissionVal > loanVal) {
-      newErrors.agentCommission = 'Agent Commission cannot exceed loan amount';
-    } else if (!isNaN(loanVal) && !isNaN(deductedVal) && (deductedVal + commissionVal) > loanVal) {
-      newErrors.agentCommission = 'Total deductions (Deducted + Commission) cannot exceed loan amount';
+    } else if (!isNaN(loanVal) && !isNaN(deductedVal) && (deductedVal + commissionVal > loanVal)) {
+      newErrors.agentCommission = 'Total deductions (Deducted Amount + Commission) cannot exceed Loan Amount';
     }
 
     const expReturnVal = parseFloat(expectedReturn);
@@ -355,13 +409,19 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     e.preventDefault();
     if (!validate()) return;
 
+    const numBookNo = parseInt(bookNo, 10);
     const loanVal = parseFloat(loanAmount);
     const deductedVal = parseFloat(deductedAmount || '0');
     const commissionVal = parseFloat(agentCommission || '0');
     const expReturnVal = parseFloat(expectedReturn);
     const interestVal = parseFloat(calculatedInterestRate?.replace('%', '') || '0');
 
+    const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
+      ? currentUser.companyUserId
+      : (selectedAgentId ? selectedAgentId : null);
+
     const payload: NewBorrowerInput = {
+      bookNo: isNaN(numBookNo) ? null : numBookNo,
       borrowerName: borrowerName.trim(),
       phoneNumber: phoneNumber.trim(),
       alternatePhoneNumber: alternatePhoneNumber.trim() || undefined,
@@ -369,9 +429,9 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       financeType,
       weeklyCollectionDay: financeType === 'Weekly' ? weeklyCollectionDay : null,
       monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
-      collectionLine: collectionLine ? collectionLine.trim() : 'Karumandapam',
+      collectionLine: collectionLine ? collectionLine.trim() : null,
       collectionMethod: collectionMethod ? collectionMethod.trim() : 'Hand Cash',
-      agentId: selectedAgentId ? selectedAgentId : null,
+      agentId: targetAgentId,
       agentCommission: commissionVal,
       parcelTokenMode,
       loanAmount: loanVal,
@@ -417,6 +477,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     }
 
     // Reset and close
+    setBookNo('');
     setBorrowerName('');
     setPhoneNumber('');
     setAlternatePhoneNumber('');
@@ -462,32 +523,60 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
         {/* Modal Body - Vertically Scrollable */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Server / General Error Alert */}
+          {errors.general && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-rose-700 text-xs sm:text-sm font-medium animate-in fade-in">
+              <AlertCircle size={18} className="shrink-0 mt-0.5 text-rose-600" />
+              <span>{errors.general}</span>
+            </div>
+          )}
+
           {/* Section 1: Basic Information */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
               Borrower Details
             </h3>
 
-            {/* 1. Borrower Name */}
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                Borrower Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={borrowerName}
-                onChange={(e) => setBorrowerName(e.target.value)}
-                placeholder="Enter borrower name"
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
-              />
-              {errors.borrowerName && (
-                <p className="text-xs text-red-500 mt-1 font-medium">{errors.borrowerName}</p>
-              )}
-            </div>
+            {/* Row 1: Book No, Borrower Name, Phone Number, Alternate Phone (4 Columns on Desktop) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Book No */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Book No <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="1"
+                  value={bookNo}
+                  onChange={(e) => setBookNo(e.target.value)}
+                  placeholder="Enter Book No (e.g. 1)"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                />
+                {errors.bookNo && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.bookNo}</p>
+                )}
+              </div>
 
-            {/* 2 & 3. Phone & Alternate Phone (2 Columns on Desktop) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* 2. Phone Number */}
+              {/* 2. Borrower Name */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Borrower Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={borrowerName}
+                  onChange={(e) => setBorrowerName(e.target.value)}
+                  placeholder="Enter borrower name"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                />
+                {errors.borrowerName && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.borrowerName}</p>
+                )}
+              </div>
+
+              {/* 3. Phone Number */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Phone Number <span className="text-red-500">*</span>
@@ -511,10 +600,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 )}
               </div>
 
-              {/* 3. Alternate Phone Number */}
+              {/* 4. Alternate Phone Number */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                  Alternate Phone Number (Optional)
+                  Alternate Phone (Optional)
                 </label>
                 <div className="relative">
                   <Phone
@@ -536,7 +625,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               </div>
             </div>
 
-            {/* 4. Address */}
+            {/* Address */}
             <div>
               <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                 Address
@@ -628,34 +717,43 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Assign to Agent
                 </label>
-                <select
-                  value={selectedAgentId}
-                  onChange={(e) => handleAgentChange(e.target.value)}
-                  disabled={activeAgents.length === 0 && !inactiveAssignedAgent}
-                  className={`w-full h-11 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4f46e5] transition-all ${
-                    activeAgents.length === 0 && !inactiveAssignedAgent
-                      ? 'bg-slate-50/70 text-slate-400 cursor-not-allowed'
-                      : 'bg-white text-[#1e293b] cursor-pointer'
-                  }`}
-                >
-                  {activeAgents.length === 0 && !inactiveAssignedAgent ? (
-                    <option value="">No Agents Available</option>
-                  ) : (
-                    <>
-                      <option value="">Select an Agent (Optional)</option>
-                      {inactiveAssignedAgent && (
-                        <option value={inactiveAssignedAgent.id}>
-                          {inactiveAssignedAgent.fullName} (Inactive)
-                        </option>
-                      )}
-                      {activeAgents.map((agent) => (
-                        <option key={agent.id} value={agent.id}>
-                          {agent.fullName}
-                        </option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                {currentRole === 'agent' ? (
+                  <div className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-medium flex items-center justify-between select-none">
+                    <span className="truncate">{currentUser?.fullName || 'Assigned to You'}</span>
+                    <span className="text-[11px] font-semibold bg-indigo-50 text-[#4f46e5] px-2 py-0.5 rounded-md shrink-0 ml-2">
+                      You
+                    </span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedAgentId}
+                    onChange={(e) => handleAgentChange(e.target.value)}
+                    disabled={activeAgents.length === 0 && !inactiveAssignedAgent}
+                    className={`w-full h-11 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4f46e5] transition-all ${
+                      activeAgents.length === 0 && !inactiveAssignedAgent
+                        ? 'bg-slate-50/70 text-slate-400 cursor-not-allowed'
+                        : 'bg-white text-[#1e293b] cursor-pointer'
+                    }`}
+                  >
+                    {activeAgents.length === 0 && !inactiveAssignedAgent ? (
+                      <option value="">No Agents Available</option>
+                    ) : (
+                      <>
+                        <option value="">Select an Agent (Optional)</option>
+                        {inactiveAssignedAgent && (
+                          <option value={inactiveAssignedAgent.id}>
+                            {inactiveAssignedAgent.fullName} (Inactive)
+                          </option>
+                        )}
+                        {activeAgents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.fullName}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                )}
               </div>
 
               {/* Line Dropdown */}
@@ -864,7 +962,18 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <input
                   type="date"
                   value={startDateIso}
-                  onChange={(e) => setStartDateIso(e.target.value)}
+                  onChange={(e) => {
+                    const newIso = e.target.value;
+                    setStartDateIso(newIso);
+                    if (!initialBorrower && newIso) {
+                      const parsed = parseCustomDate(newIso);
+                      if (parsed) {
+                        const jsDay = parsed.getDay();
+                        setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
+                        setMonthlyCollectionDay(parsed.getDate());
+                      }
+                    }
+                  }}
                   className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                 />
                 <p className="text-[11px] text-[#64748b] mt-1 font-medium">
