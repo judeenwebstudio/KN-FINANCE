@@ -4,7 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+import { handleCors } from './_cors';
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
+
   if (req.method !== 'POST' && req.method !== 'PATCH') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }

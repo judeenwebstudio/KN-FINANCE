@@ -37,7 +37,11 @@ function verifyBootstrapSecret(provided: string, expected: string): boolean {
   return crypto.timingSafeEqual(pHash, eHash);
 }
 
+import { handleCors } from './_cors';
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }

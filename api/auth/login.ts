@@ -7,6 +7,8 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL ||
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const anonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
+import { handleCors } from './_cors';
+
 function getClientIp(req: VercelRequest): string {
   const xRealIp = req.headers['x-real-ip'];
   if (typeof xRealIp === 'string' && xRealIp.trim()) {
@@ -20,6 +22,8 @@ function getClientIp(req: VercelRequest): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
+
   // Only accept POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
