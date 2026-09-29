@@ -166,6 +166,7 @@ export type ActivityAction =
   | 'borrower_created'
   | 'borrower_updated'
   | 'payment_collected'
+  | 'payment_updated'
   | 'loan_closed'
   | 'agent_created'
   | 'agent_updated'
