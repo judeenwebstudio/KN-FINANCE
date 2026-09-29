@@ -21,7 +21,13 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { updatePayment, manager, agents, currentRole } = useApp();
+  const { updatePayment, manager, agents, currentRole, currentUser } = useApp();
+
+  const isAssigned = (
+    Boolean(borrower?.agentId && currentUser?.companyUserId && borrower.agentId === currentUser.companyUserId) ||
+    Boolean(borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
+  );
+  const canEdit = currentRole === 'manager' || (currentRole === 'agent' && isAssigned);
 
   const [amount, setAmount] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>('');
@@ -88,8 +94,8 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
     e.preventDefault();
     setSubmitError(null);
 
-    if (currentRole !== 'manager') {
-      setSubmitError('Access denied: Only company Managers can edit payment records.');
+    if (!canEdit) {
+      setSubmitError('Access denied: You do not have permission to edit this payment record.');
       return;
     }
 

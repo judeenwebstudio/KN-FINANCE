@@ -167,6 +167,8 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
     Boolean(borrower?.assignedAgent && currentUser?.fullName && borrower.assignedAgent.toLowerCase() === currentUser.fullName.toLowerCase())
   );
 
+  const canEdit = currentRole === 'manager' || (currentRole === 'agent' && isAssignedToAgent);
+
   // Security & visibility guard: ALL HOOKS HAVE EXECUTED. Now safe to return null if closed or unauthorized.
   if (!isOpen || !borrower || !loanSummary || (currentRole === 'agent' && !isAssignedToAgent)) {
     return null;
@@ -362,7 +364,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                 </span>
               )}
 
-              {currentRole === 'manager' && (
+              {canEdit && (
                 <button
                   type="button"
                   onClick={() => setIsEditBorrowerOpen(true)}
@@ -705,7 +707,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                       <th className="py-3 px-4 sm:px-5">METHOD</th>
                       <th className="py-3 px-4 sm:px-5">COLLECTED BY</th>
                       <th className="py-3 px-4 sm:px-5">NOTE</th>
-                      {currentRole === 'manager' && (
+                      {canEdit && (
                         <th className="py-3 px-4 sm:px-5 text-right">ACTION</th>
                       )}
                     </tr>
@@ -714,7 +716,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                     {borrowerPayments.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={currentRole === 'manager' ? 6 : 5}
+                          colSpan={canEdit ? 6 : 5}
                           className="py-10 px-4 text-center text-[#64748b] font-medium"
                         >
                           No payments recorded yet.
@@ -750,7 +752,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                           <td className="py-3.5 px-4 sm:px-5 text-[#64748b]">
                             {p.note || '—'}
                           </td>
-                          {currentRole === 'manager' && (
+                          {canEdit && (
                             <td className="py-3.5 px-4 sm:px-5 text-right">
                               <button
                                 type="button"
