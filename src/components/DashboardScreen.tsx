@@ -23,7 +23,7 @@ import { BorrowerDetailsModal } from './BorrowerDetailsModal';
 import { CashInHandModal } from './CashInHandModal';
 import { OutFlowModal } from './OutFlowModal';
 import { resolveAgentName } from '../utils/agentUtils';
-import { getCurrentActionableDue, getTodayIsoDate } from '../utils/loanCalculations';
+import { getCurrentActionableDue, getTodayIsoDate, formatCollectionSchedule } from '../utils/loanCalculations';
 import { formatAppDate } from '../utils/dateUtils';
 
 export const DashboardScreen: React.FC = () => {
@@ -499,7 +499,7 @@ export const DashboardScreen: React.FC = () => {
                   <th className="py-3.5 px-4 sm:px-6">BORROWER</th>
                   <th className="py-3.5 px-4 sm:px-6">PHONE</th>
                   <th className="py-3.5 px-4 sm:px-6">LINE</th>
-                  <th className="py-3.5 px-4 sm:px-6">TYPE</th>
+                  <th className="py-3.5 px-4 sm:px-6">COLLECTION SCHEDULE</th>
                   <th className="py-3.5 px-4 sm:px-6">AGENT</th>
                   <th className="py-3.5 px-4 sm:px-6">DUE DATE</th>
                   <th className="py-3.5 px-4 sm:px-6 text-right">PENDING</th>
@@ -554,20 +554,8 @@ export const DashboardScreen: React.FC = () => {
                         <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium">
                           {borrower.collectionLine || '—'}
                         </td>
-                        <td className="py-3.5 px-4 sm:px-6">
-                          {borrower.collectionMethod ? (
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
-                                borrower.collectionMethod === 'Banking'
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                              }`}
-                            >
-                              {borrower.collectionMethod}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
+                        <td className="py-3.5 px-4 sm:px-6 text-[#1e293b] font-medium whitespace-nowrap">
+                          {formatCollectionSchedule(borrower)}
                         </td>
                         <td className="py-3.5 px-4 sm:px-6 text-[#475569]">
                           <span className={agentName === 'Unassigned' ? 'text-slate-400 italic' : 'font-medium text-[#1e293b]'}>
