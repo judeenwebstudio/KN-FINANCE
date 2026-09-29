@@ -15,15 +15,17 @@
 --    - Borrower status (active/closed) is dynamically synced based on total paid vs expected return.
 -- 3. Payment Editing Consistency:
 --    - Editing payment amount updates PAYMENT_COLLECTED in company_cash_ledger atomically.
+--    - Rejects overpayment exceeding expected_return with an explicit error.
 --    - Prevents duplicate or stale ledger entries.
 --    - Re-evaluates borrower status (active/closed) and cash accounting metrics.
--- 4. Audit Trail:
+-- 4. Audit Trail & Immutability:
 --    - Creates entity_audit_logs table tracking entity type, entity ID, previous & new values,
 --      changed fields, and performing user (never storing auth secrets/credentials).
+--    - Direct INSERT, UPDATE, and DELETE by clients are strictly denied by RLS.
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. ENTITY_AUDIT_LOGS Table
+-- 1. ENTITY_AUDIT_LOGS Table & Strict RLS
 -- Immutable audit log for historical edits to financial and master entities.
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS entity_audit_logs (
@@ -49,7 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_entity_audit_logs_company_id ON entity_audit_logs
 CREATE INDEX IF NOT EXISTS idx_entity_audit_logs_entity ON entity_audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_entity_audit_logs_created_at ON entity_audit_logs(created_at DESC);
 
--- RLS on entity_audit_logs: Managers only can view; updates and deletes denied
+-- RLS on entity_audit_logs: Managers only can SELECT; direct INSERT, UPDATE, and DELETE denied
 ALTER TABLE entity_audit_logs ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Managers can view entity audit logs" ON entity_audit_logs;
@@ -61,6 +63,13 @@ USING (
   company_id = get_auth_company_id()
   AND is_company_manager()
 );
+
+DROP POLICY IF EXISTS "Deny direct insert on entity audit logs" ON entity_audit_logs;
+CREATE POLICY "Deny direct insert on entity audit logs"
+ON entity_audit_logs
+FOR INSERT
+TO authenticated, anon
+WITH CHECK (false);
 
 DROP POLICY IF EXISTS "Deny direct update on entity audit logs" ON entity_audit_logs;
 CREATE POLICY "Deny direct update on entity audit logs"
@@ -77,7 +86,22 @@ TO authenticated, anon
 USING (false);
 
 -- ------------------------------------------------------------------------------
--- 2. RPC: edit_borrower_record()
+-- 2. Ensure Unique Indexes on company_cash_ledger
+-- ------------------------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_ledger_loan_disbursed
+ON company_cash_ledger(company_id, borrower_id)
+WHERE transaction_type = 'LOAN_DISBURSED' AND borrower_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_ledger_deducted_amount
+ON company_cash_ledger(company_id, borrower_id)
+WHERE transaction_type = 'DEDUCTED_AMOUNT' AND borrower_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_ledger_payment_collected
+ON company_cash_ledger(company_id, payment_id)
+WHERE transaction_type = 'PAYMENT_COLLECTED' AND payment_id IS NOT NULL;
+
+-- ------------------------------------------------------------------------------
+-- 3. RPC: edit_borrower_record()
 -- Secure atomic transaction for updating borrower master data and financial parameters.
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION edit_borrower_record(
@@ -127,6 +151,10 @@ BEGIN
   FROM company_users
   WHERE auth_user_id = auth.uid() AND company_id = v_company_id
   LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Access denied: Unable to resolve active company user session.';
+  END IF;
 
   -- 2. Fetch existing borrower record with lock
   SELECT * INTO v_old_borrower
@@ -321,7 +349,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- ------------------------------------------------------------------------------
--- 3. RPC: edit_payment_record()
+-- 4. RPC: edit_payment_record()
 -- Secure atomic transaction for updating historical payment records & cash ledger.
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION edit_payment_record(
@@ -356,6 +384,10 @@ BEGIN
   FROM company_users
   WHERE auth_user_id = auth.uid() AND company_id = v_company_id
   LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Access denied: Unable to resolve active company user session.';
+  END IF;
 
   -- 2. Fetch existing payment record with lock
   SELECT * INTO v_old_payment
@@ -395,7 +427,16 @@ BEGIN
 
   v_new_total_paid := v_other_paid + p_amount;
 
-  IF v_new_total_paid >= v_borrower.expected_return THEN
+  -- Strict Overpayment Protection
+  IF v_new_total_paid > v_borrower.expected_return THEN
+    RAISE EXCEPTION 'Payment of ₹% rejected: total paid (₹%) would exceed borrower expected return (₹%). Maximum remaining payable is ₹%.',
+      TRIM(TO_CHAR(p_amount, '99,99,99,990')),
+      TRIM(TO_CHAR(v_new_total_paid, '99,99,99,990')),
+      TRIM(TO_CHAR(v_borrower.expected_return, '99,99,99,990')),
+      TRIM(TO_CHAR(GREATEST(0, v_borrower.expected_return - v_other_paid), '99,99,99,990'));
+  END IF;
+
+  IF v_new_total_paid = v_borrower.expected_return THEN
     v_new_status := 'closed';
   ELSE
     v_new_status := 'active';
@@ -476,7 +517,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- ------------------------------------------------------------------------------
--- 4. Permissions on RPC Functions
+-- 5. Permissions on RPC Functions
 -- ------------------------------------------------------------------------------
 REVOKE EXECUTE ON FUNCTION edit_borrower_record FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION edit_borrower_record TO authenticated, service_role;
