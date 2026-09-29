@@ -99,7 +99,7 @@ export const ProfileScreen: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[#f6f7fb] w-full">
       {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 safe-area-header">
         <div className="flex items-center justify-between max-w-4xl mx-auto w-full">
           <button
             onClick={() => navigateTo('dashboard')}

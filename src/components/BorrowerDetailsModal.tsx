@@ -318,73 +318,147 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   return (
     <>
       {/* Primary Borrower Details Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
-        <div className="w-full max-w-4xl max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="w-full max-w-4xl max-h-[90vh] sm:max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
           {/* Modal Header */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white z-10">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
-                  Borrower Details
-                </span>
-                <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                    isClosed
-                      ? 'bg-slate-100 text-slate-600'
-                      : 'bg-emerald-50 text-emerald-700'
-                  }`}
-                >
-                  {isClosed ? 'Closed' : 'Active'}
-                </span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-[#1e293b] mt-0.5">
-                {borrower.borrowerName || borrower.name}
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              {!isClosed ? (
-                currentRole === 'agent' && !isAssignedToAgent ? (
-                  <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-semibold">
-                    Not Assigned
+          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-white z-10 shrink-0">
+            {/* Mobile Header (< sm) */}
+            <div className="sm:hidden space-y-2.5">
+              {/* Top Row: Badge & Close Button */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#4f46e5]">
+                    Borrower Details
                   </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleOpenCollectPayment}
-                    className="px-4 py-2 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.98] transition-all flex items-center gap-1.5"
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      isClosed
+                        ? 'bg-slate-100 text-slate-600'
+                        : 'bg-emerald-50 text-emerald-700'
+                    }`}
                   >
-                    <Plus size={16} />
-                    <span>Collect Payment</span>
-                  </button>
-                )
-              ) : (
-                <span className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">
-                  <CheckCircle2 size={14} className="text-emerald-500" />
-                  <span>Loan Settled</span>
-                </span>
-              )}
-
-              {currentRole === 'manager' && (
+                    {isClosed ? 'Closed' : 'Active'}
+                  </span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setIsEditBorrowerOpen(true)}
-                  className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-sm active:scale-[0.98] transition-all flex items-center gap-1.5"
-                  title="Edit Borrower Details"
+                  onClick={onClose}
+                  className="p-1 -mr-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                  aria-label="Close"
                 >
-                  <Edit2 size={14} className="text-[#4f46e5]" />
-                  <span>Edit Borrower</span>
+                  <X size={20} />
                 </button>
-              )}
+              </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
+              {/* Borrower Name */}
+              <h2 className="text-lg font-bold text-[#1e293b] leading-tight break-words">
+                {borrower.borrowerName || borrower.name}
+              </h2>
+
+              {/* Action Buttons Row on Mobile */}
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                {!isClosed ? (
+                  currentRole === 'agent' && !isAssignedToAgent ? (
+                    <span className="flex-1 text-center py-2 px-3 rounded-xl bg-slate-100 text-slate-500 text-xs font-semibold">
+                      Not Assigned
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleOpenCollectPayment}
+                      className="flex-1 min-w-[130px] h-9 px-3 rounded-xl bg-[#4f46e5] text-white text-xs font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Plus size={15} className="shrink-0" />
+                      <span className="truncate">Collect Payment</span>
+                    </button>
+                  )
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">
+                    <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                    <span>Loan Settled</span>
+                  </span>
+                )}
+
+                {currentRole === 'manager' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditBorrowerOpen(true)}
+                    className="flex-1 min-w-[120px] h-9 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                    title="Edit Borrower Details"
+                  >
+                    <Edit2 size={13} className="text-[#4f46e5] shrink-0" />
+                    <span className="truncate">Edit Borrower</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Desktop Header (sm and above) */}
+            <div className="hidden sm:flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
+                    Borrower Details
+                  </span>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                      isClosed
+                        ? 'bg-slate-100 text-slate-600'
+                        : 'bg-emerald-50 text-emerald-700'
+                    }`}
+                  >
+                    {isClosed ? 'Closed' : 'Active'}
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-bold text-[#1e293b] mt-0.5">
+                  {borrower.borrowerName || borrower.name}
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                {!isClosed ? (
+                  currentRole === 'agent' && !isAssignedToAgent ? (
+                    <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-semibold">
+                      Not Assigned
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleOpenCollectPayment}
+                      className="px-4 py-2 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.98] transition-all flex items-center gap-1.5"
+                    >
+                      <Plus size={16} />
+                      <span>Collect Payment</span>
+                    </button>
+                  )
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold">
+                    <CheckCircle2 size={14} className="text-emerald-500" />
+                    <span>Loan Settled</span>
+                  </span>
+                )}
+
+                {currentRole === 'manager' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditBorrowerOpen(true)}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-sm active:scale-[0.98] transition-all flex items-center gap-1.5"
+                    title="Edit Borrower Details"
+                  >
+                    <Edit2 size={14} className="text-[#4f46e5]" />
+                    <span>Edit Borrower</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -779,7 +853,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
 
       {/* Collect Payment Sub-Dialog Modal */}
       {isCollectModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-150">
             {/* Sub-Modal Header */}
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
@@ -961,7 +1035,7 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
 
       {/* Payment Confirmation Modal Dialog */}
       {isConfirmPaymentOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-[#4f46e5] shrink-0">

@@ -192,7 +192,7 @@ export const DashboardScreen: React.FC = () => {
       )}
 
       {/* Top Header - Spans Full Width */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 safe-area-header">
         <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
           {/* Left: KN FINANCE */}
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1e293b]">

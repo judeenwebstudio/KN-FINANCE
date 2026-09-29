@@ -31,6 +31,19 @@ body {
   padding-right: env(safe-area-inset-right, 0px);
 }
 
+/* Safe Area Header utility with built-in status bar spacing */
+.safe-area-header {
+  padding-top: calc(0.875rem + env(safe-area-inset-top, 0px));
+  padding-bottom: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .safe-area-header {
+    padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+    padding-bottom: 1rem;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
