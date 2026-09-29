@@ -94,9 +94,10 @@ export async function loginWithPin(
   }
 
   isAuthenticating = true;
+  const targetUrl = getApiUrl('/api/auth/login');
 
   try {
-    const response = await fetch(getApiUrl('/api/auth/login'), {
+    const response = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -134,7 +135,9 @@ export async function loginWithPin(
       isLocked: data.locked || response.status === 429,
     };
 
-  } catch {
+  } catch (err: unknown) {
+    const errorType = err instanceof Error ? `${err.name}: ${err.message}` : typeof err;
+    console.error(`[authService] Network error during authentication to ${targetUrl} (${errorType})`);
     return {
       success: false,
       error: 'Authentication service is unreachable. Please check your internet connection.',

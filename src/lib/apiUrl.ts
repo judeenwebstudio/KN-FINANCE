@@ -20,23 +20,25 @@ export function getNativeApiBaseUrl(): string {
   return DEFAULT_PROD_API_BASE;
 }
 
-/**
- * Resolves API paths dynamically:
- * - Web (Vercel / Browser): Returns relative path (e.g., `/api/auth/login`)
- * - Native Android (Capacitor): Returns absolute HTTPS URL (e.g., `https://kn-finance-be8m.vercel.app/api/auth/login`)
- *
- * @param path Relative API endpoint path (e.g., '/api/auth/login')
- * @returns Fully resolved API URL
- */
 export function getApiUrl(path: string): string {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-  // On Web: Always use relative path so same-origin requests & Vercel routing operate unchanged
-  if (!isNative) {
+  // On Web (running directly on Vercel deployment domain):
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app')) {
     return cleanPath;
   }
 
-  // On Native Android: Prepend verified HTTPS backend base URL
-  const base = getNativeApiBaseUrl();
-  return `${base}${cleanPath}`;
+  // On Native Android / Capacitor (or localhost WebView execution):
+  if (
+    isNative ||
+    (typeof window !== 'undefined' &&
+      (window.location.protocol === 'capacitor:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'))
+  ) {
+    const base = getNativeApiBaseUrl();
+    return `${base}${cleanPath}`;
+  }
+
+  return cleanPath;
 }

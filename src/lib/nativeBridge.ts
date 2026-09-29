@@ -3,7 +3,10 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
 
-export const isNative = Capacitor.isNativePlatform();
+export const isNative =
+  Capacitor.isNativePlatform() ||
+  (typeof window !== 'undefined' &&
+    (Capacitor.getPlatform() === 'android' || Capacitor.getPlatform() === 'ios'));
 
 // Modal & Overlay Back Button Stack (LIFO: topmost modal closes first)
 const backHandlerStack: Array<() => boolean> = [];
