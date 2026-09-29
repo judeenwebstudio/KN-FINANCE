@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Plus,
+  Edit2,
   AlertTriangle,
   CheckCircle2,
   Receipt,
@@ -19,7 +20,7 @@ import {
   formatFileSize,
 } from '../utils/documentStorage';
 import { COLLECTION_METHODS } from '../types';
-import type { BorrowerDocument, CollectionMethod } from '../types';
+import type { BorrowerDocument, CollectionMethod, PaymentRecord } from '../types';
 import {
   getBorrowerLoanSummary,
   getTodayIsoDate,
@@ -29,6 +30,8 @@ import { resolveCollectorName } from '../utils/agentUtils';
 import { formatAppDate } from '../utils/dateUtils';
 import { playPaymentSuccessSound } from '../utils/soundUtils';
 import { useModalBackHandler } from '../utils/useModalBackHandler';
+import { EditBorrowerModal } from './EditBorrowerModal';
+import { EditPaymentModal } from './EditPaymentModal';
 
 interface BorrowerDetailsModalProps {
   isOpen: boolean;
@@ -44,6 +47,10 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
   useModalBackHandler(isOpen, onClose);
 
   const { borrowers, payments, manager, agents, addPayment, settings, currentUser, currentRole } = useApp();
+
+  // Edit modals state
+  const [isEditBorrowerOpen, setIsEditBorrowerOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
 
   // Find fresh borrower record by ID so state is reactive to changes
   const borrower = useMemo(() => {
@@ -356,6 +363,18 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                   <CheckCircle2 size={14} className="text-emerald-500" />
                   <span>Loan Settled</span>
                 </span>
+              )}
+
+              {currentRole === 'manager' && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditBorrowerOpen(true)}
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold shadow-sm active:scale-[0.98] transition-all flex items-center gap-1.5"
+                  title="Edit Borrower Details"
+                >
+                  <Edit2 size={14} className="text-[#4f46e5]" />
+                  <span>Edit Borrower</span>
+                </button>
               )}
 
               <button
@@ -689,13 +708,16 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                       <th className="py-3 px-4 sm:px-5">METHOD</th>
                       <th className="py-3 px-4 sm:px-5">COLLECTED BY</th>
                       <th className="py-3 px-4 sm:px-5">NOTE</th>
+                      {currentRole === 'manager' && (
+                        <th className="py-3 px-4 sm:px-5 text-right">ACTION</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                     {borrowerPayments.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={currentRole === 'manager' ? 6 : 5}
                           className="py-10 px-4 text-center text-[#64748b] font-medium"
                         >
                           No payments recorded yet.
@@ -731,6 +753,19 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                           <td className="py-3.5 px-4 sm:px-5 text-[#64748b]">
                             {p.note || '—'}
                           </td>
+                          {currentRole === 'manager' && (
+                            <td className="py-3.5 px-4 sm:px-5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setEditingPayment(p)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:text-[#4f46e5] hover:border-indigo-200 hover:bg-indigo-50/50 text-xs font-semibold transition-all"
+                                title="Edit payment details"
+                              >
+                                <Edit2 size={12} />
+                                <span>Edit</span>
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}
@@ -981,6 +1016,32 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Edit Borrower Modal */}
+      {isEditBorrowerOpen && borrower && (
+        <EditBorrowerModal
+          isOpen={isEditBorrowerOpen}
+          borrower={borrower}
+          onClose={() => setIsEditBorrowerOpen(false)}
+          onSuccess={() => {
+            setPaymentSuccessToast('Borrower details updated successfully.');
+          }}
+        />
+      )}
+
+      {/* Edit Payment Modal */}
+      {editingPayment && (
+        <EditPaymentModal
+          isOpen={Boolean(editingPayment)}
+          payment={editingPayment}
+          borrower={borrower}
+          onClose={() => setEditingPayment(null)}
+          onSuccess={() => {
+            setPaymentSuccessToast('Payment record updated successfully.');
+          }}
+        />
+      )}
     </>
   );
 };
+

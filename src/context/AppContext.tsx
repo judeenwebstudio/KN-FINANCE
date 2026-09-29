@@ -15,6 +15,7 @@ import type {
   AppSettings,
   CashLedgerEntry,
   CompanyCollectionLine,
+  CollectionMethod,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
@@ -82,6 +83,7 @@ interface AppContextType {
   addBorrower: (data: NewBorrowerInput) => Promise<{ success: boolean; error?: string; borrowerId?: string }>;
   updateBorrower: (id: string, data: Partial<NewBorrowerInput>) => Promise<{ success: boolean; error?: string }>;
   addPayment: (data: Omit<PaymentRecord, 'id' | 'createdAt'>) => Promise<{ success: boolean; error?: string }>;
+  updatePayment: (id: string, data: { amount: number; paymentDate: string; collectionMethod?: CollectionMethod | string | null; note?: string }) => Promise<{ success: boolean; error?: string }>;
   addActivity: (entry: Omit<ActivityLogEntry, 'id' | 'createdAt'>) => void;
   getCashInHand: () => number;
   getTotalOutFlow: () => number;
@@ -1397,62 +1399,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateBorrower = async (id: string, data: Partial<NewBorrowerInput>): Promise<{ success: boolean; error?: string }> => {
     if (isCloudAuth && currentUser && supabase) {
       try {
-        const updatePayload: any = {};
-        if (data.bookNo !== undefined) {
-          updatePayload.book_no = data.bookNo !== null ? Number(data.bookNo) : null;
-        }
-        if (data.borrowerName !== undefined) updatePayload.name = data.borrowerName.trim();
-        if (data.phoneNumber !== undefined) updatePayload.phone = data.phoneNumber.trim();
-        if (data.alternatePhoneNumber !== undefined) updatePayload.alternate_phone = data.alternatePhoneNumber.trim() || null;
-        if (data.address !== undefined) updatePayload.address = data.address.trim() || null;
-        if (data.financeType !== undefined) updatePayload.finance_type = data.financeType;
-        if (data.weeklyCollectionDay !== undefined) {
-          updatePayload.weekly_collection_day = data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null;
-        }
-        if (data.monthlyCollectionDay !== undefined) {
-          updatePayload.monthly_collection_day = data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null;
-        }
-        if (data.collectionLine !== undefined) {
-          updatePayload.collection_line = data.collectionLine ? data.collectionLine.trim() : null;
-        }
-        if (data.collectionMethod !== undefined) {
-          updatePayload.collection_method = data.collectionMethod ? data.collectionMethod.trim() : null;
-        }
-        if (data.agentId !== undefined) updatePayload.assigned_agent_id = data.agentId || null;
-        if (data.agentCommission !== undefined) updatePayload.agent_commission = data.agentCommission;
-        if (data.loanAmount !== undefined) updatePayload.loan_amount = data.loanAmount;
-        if (data.deductedAmount !== undefined) updatePayload.deducted_amount = data.deductedAmount;
-        if (data.netAmountGiven !== undefined) updatePayload.net_amount_given = data.netAmountGiven;
-        if (data.expectedReturn !== undefined) updatePayload.expected_return = data.expectedReturn;
-        if (data.interestRate !== undefined) updatePayload.interest_rate = data.interestRate;
-        if (data.repaymentDuration !== undefined) updatePayload.repayment_duration = data.repaymentDuration;
-        if (data.startDate !== undefined) updatePayload.start_date = toDbDate(data.startDate);
-        if (data.endDate !== undefined) updatePayload.end_date = toDbDate(data.endDate);
-        if (data.isExistingLoan !== undefined) updatePayload.existing_loan = data.isExistingLoan;
-        if (data.parcelTokenMode !== undefined) updatePayload.parcel_token_mode = data.parcelTokenMode;
+        const parsedBookNo = data.bookNo !== undefined && data.bookNo !== null ? Number(data.bookNo) : null;
+        const startIso = toDbDate(data.startDate);
+        const endIso = toDbDate(data.endDate);
 
-        const { error } = await (supabase as any)
-          .from('borrowers')
-          .update(updatePayload)
-          .eq('id', id)
-          .eq('company_id', currentUser.companyId);
+        const { data: rpcData, error: rpcErr } = await (supabase as any)
+          .rpc('edit_borrower_record', {
+            p_borrower_id: id,
+            p_name: data.borrowerName !== undefined ? data.borrowerName.trim() : null,
+            p_phone: data.phoneNumber !== undefined ? data.phoneNumber.trim() : null,
+            p_alternate_phone: data.alternatePhoneNumber !== undefined ? (data.alternatePhoneNumber.trim() || null) : null,
+            p_address: data.address !== undefined ? (data.address.trim() || null) : null,
+            p_book_no: parsedBookNo,
+            p_collection_line: data.collectionLine ? data.collectionLine.trim() : null,
+            p_assigned_agent_id: data.agentId || null,
+            p_collection_method: data.collectionMethod ? data.collectionMethod.trim() : 'Hand Cash',
+            p_loan_amount: data.loanAmount !== undefined ? Number(data.loanAmount) : null,
+            p_deducted_amount: data.deductedAmount !== undefined ? Number(data.deductedAmount) : 0,
+            p_agent_commission: data.agentCommission !== undefined ? Number(data.agentCommission) : 0,
+            p_expected_return: data.expectedReturn !== undefined ? Number(data.expectedReturn) : null,
+            p_interest_rate: data.interestRate !== undefined ? Number(data.interestRate) : null,
+            p_finance_type: data.financeType || 'Daily',
+            p_repayment_duration: data.repaymentDuration || null,
+            p_start_date: startIso,
+            p_end_date: endIso,
+            p_weekly_collection_day: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
+            p_monthly_collection_day: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
+          });
 
-        if (error) {
-          console.error('Supabase updateBorrower error:', error);
-          return { success: false, error: error.message };
+        if (rpcErr) {
+          console.error('edit_borrower_record RPC error:', rpcErr);
+          return { success: false, error: rpcErr.message };
+        }
+
+        const res = typeof rpcData === 'string' ? JSON.parse(rpcData) : rpcData;
+        if (res && res.success === false) {
+          return { success: false, error: res.error || 'Failed to update borrower.' };
         }
 
         await fetchCloudData();
         return { success: true };
       } catch (err: any) {
         console.error('updateBorrower exception:', err);
-        return { success: false, error: err.message || 'Failed to update borrower.' };
+        return { success: false, error: err.message || 'Failed to update borrower in cloud.' };
       }
     }
 
     // Local / Offline fallback
     const target = borrowers.find(b => b.id === id);
     const updatedName = data.borrowerName !== undefined ? data.borrowerName.trim() : (target?.borrowerName || target?.name || 'Borrower');
+    const loanAmt = data.loanAmount !== undefined ? Number(data.loanAmount) : (target?.loanAmount || target?.amount || 0);
+    const deductedAmt = data.deductedAmount !== undefined ? Number(data.deductedAmount) : (target?.deductedAmount || 0);
+    const agentComm = data.agentCommission !== undefined ? Number(data.agentCommission) : (target?.agentCommission || 0);
+    const expReturn = data.expectedReturn !== undefined ? Number(data.expectedReturn) : (target?.expectedReturn || loanAmt);
+    const netAmt = data.netAmountGiven !== undefined ? data.netAmountGiven : Math.max(0, loanAmt - deductedAmt - agentComm);
+
+    const totalPaidSoFar = payments
+      .filter(p => p.borrowerId === id)
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const newStatus: 'active' | 'closed' = totalPaidSoFar >= expReturn ? 'closed' : 'active';
 
     setBorrowers(prev =>
       prev.map((borrower) => {
@@ -1460,24 +1465,163 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...borrower,
           ...data,
-          agentCommission: data.agentCommission !== undefined ? data.agentCommission : (borrower.agentCommission || 0),
-          name: data.borrowerName !== undefined ? data.borrowerName : borrower.name,
-          borrowerName: data.borrowerName !== undefined ? data.borrowerName : borrower.borrowerName,
+          bookNo: data.bookNo !== undefined ? (data.bookNo !== null ? Number(data.bookNo) : null) : borrower.bookNo,
+          name: updatedName,
+          borrowerName: updatedName,
           phone: data.phoneNumber !== undefined ? data.phoneNumber : borrower.phone,
           phoneNumber: data.phoneNumber !== undefined ? data.phoneNumber : borrower.phoneNumber,
-          amount: data.loanAmount !== undefined ? data.loanAmount : borrower.amount,
-          loanAmount: data.loanAmount !== undefined ? data.loanAmount : borrower.loanAmount,
+          alternatePhoneNumber: data.alternatePhoneNumber !== undefined ? data.alternatePhoneNumber : borrower.alternatePhoneNumber,
+          address: data.address !== undefined ? data.address : borrower.address,
+          financeType: data.financeType || borrower.financeType,
+          weeklyCollectionDay: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
+          monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
+          collectionLine: data.collectionLine !== undefined ? data.collectionLine : borrower.collectionLine,
+          collectionMethod: data.collectionMethod !== undefined ? data.collectionMethod : borrower.collectionMethod,
+          amount: loanAmt,
+          loanAmount: loanAmt,
+          deductedAmount: deductedAmt,
+          agentCommission: agentComm,
+          netAmountGiven: netAmt,
+          expectedReturn: expReturn,
+          interestRate: data.interestRate !== undefined ? Number(data.interestRate) : borrower.interestRate,
+          repaymentDuration: data.repaymentDuration || borrower.repaymentDuration,
+          startDate: data.startDate || borrower.startDate,
+          endDate: data.endDate || borrower.endDate,
+          status: newStatus,
           agentId: data.agentId !== undefined ? data.agentId : borrower.agentId,
         };
       })
     );
 
+    // Update cashLedger LOAN_DISBURSED and DEDUCTED_AMOUNT entries
+    setCashLedger(prev => {
+      let updated = prev.map(entry => {
+        if (entry.borrowerId === id && entry.transactionType === 'LOAN_DISBURSED') {
+          return { ...entry, amount: loanAmt, note: `Loan disbursed to ${updatedName}` };
+        }
+        if (entry.borrowerId === id && entry.transactionType === 'DEDUCTED_AMOUNT') {
+          return { ...entry, amount: deductedAmt, note: `Deducted amount retained for ${updatedName}` };
+        }
+        return entry;
+      });
+
+      if (deductedAmt <= 0) {
+        updated = updated.filter(entry => !(entry.borrowerId === id && entry.transactionType === 'DEDUCTED_AMOUNT'));
+      } else if (!updated.some(entry => entry.borrowerId === id && entry.transactionType === 'DEDUCTED_AMOUNT')) {
+        const deductionEntry: CashLedgerEntry = {
+          id: `cash_deduct_${id}_${Date.now()}`,
+          companyId: currentUser?.companyId,
+          transactionType: 'DEDUCTED_AMOUNT',
+          amount: deductedAmt,
+          sourceType: 'DEDUCTION',
+          borrowerId: id,
+          borrowerName: updatedName,
+          note: `Deducted amount retained for ${updatedName}`,
+          performedByUserId: currentUser?.companyUserId || null,
+          performedByName: currentUser?.fullName || (currentRole === 'agent' ? 'Agent' : 'Manager'),
+          createdAt: new Date().toISOString(),
+        };
+        updated = [deductionEntry, ...updated];
+      }
+
+      return updated;
+    });
+
     addActivity({
       action: 'borrower_updated',
-      performedByUserId: null,
-      performedByRole: 'manager',
+      performedByUserId: currentUser?.companyUserId || null,
+      performedByRole: currentRole,
       borrowerId: id,
       message: `Borrower ${updatedName} details were updated.`,
+    });
+
+    return { success: true };
+  };
+
+  const updatePayment = async (
+    id: string,
+    data: { amount: number; paymentDate: string; collectionMethod?: CollectionMethod | string | null; note?: string }
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (isCloudAuth && currentUser && supabase) {
+      try {
+        const paymentDateIso = toDbDate(data.paymentDate) || data.paymentDate;
+        const { data: rpcData, error: rpcErr } = await (supabase as any)
+          .rpc('edit_payment_record', {
+            p_payment_id: id,
+            p_amount: data.amount,
+            p_payment_date: paymentDateIso,
+            p_collection_method: data.collectionMethod ? data.collectionMethod.trim() : 'Hand Cash',
+            p_note: data.note?.trim() || null,
+          });
+
+        if (rpcErr) {
+          console.error('edit_payment_record RPC error:', rpcErr);
+          return { success: false, error: rpcErr.message };
+        }
+
+        const res = typeof rpcData === 'string' ? JSON.parse(rpcData) : rpcData;
+        if (res && res.success === false) {
+          return { success: false, error: res.error || 'Failed to update payment.' };
+        }
+
+        await fetchCloudData();
+        return { success: true };
+      } catch (err: any) {
+        console.error('updatePayment exception:', err);
+        return { success: false, error: err.message || 'Failed to update payment in cloud.' };
+      }
+    }
+
+    // Local / Offline fallback
+    const targetPayment = payments.find(p => p.id === id);
+    if (!targetPayment) {
+      return { success: false, error: 'Payment not found' };
+    }
+
+    const updatedPayments = payments.map(p => {
+      if (p.id !== id) return p;
+      return {
+        ...p,
+        amount: data.amount,
+        paymentDate: data.paymentDate,
+        collectionMethod: data.collectionMethod !== undefined ? data.collectionMethod : p.collectionMethod,
+        note: data.note !== undefined ? data.note : p.note,
+      };
+    });
+    setPayments(updatedPayments);
+
+    // Recalculate borrower total paid and status
+    const borrowerId = targetPayment.borrowerId;
+    const borrowerObj = borrowers.find(b => b.id === borrowerId);
+    if (borrowerObj) {
+      const newTotalPaid = updatedPayments
+        .filter(p => p.borrowerId === borrowerId)
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const newStatus: 'active' | 'closed' = newTotalPaid >= borrowerObj.expectedReturn ? 'closed' : 'active';
+      setBorrowers(prev => prev.map(b => b.id === borrowerId ? { ...b, status: newStatus } : b));
+    }
+
+    // Update cashLedger
+    setCashLedger(prev =>
+      prev.map(entry => {
+        if (entry.paymentId === id && entry.transactionType === 'PAYMENT_COLLECTED') {
+          return {
+            ...entry,
+            amount: data.amount,
+            note: `Collection received from ${targetPayment.borrowerName} (edited)`,
+          };
+        }
+        return entry;
+      })
+    );
+
+    addActivity({
+      action: 'payment_updated',
+      performedByUserId: currentUser?.companyUserId || null,
+      performedByRole: currentRole,
+      borrowerId: targetPayment.borrowerId,
+      amount: data.amount,
+      message: `Payment of ₹${data.amount.toLocaleString('en-IN')} for ${targetPayment.borrowerName} was edited.`,
     });
 
     return { success: true };
@@ -1808,6 +1952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addBorrower,
         updateBorrower,
         addPayment,
+        updatePayment,
         addActivity,
         getCashInHand,
         getTotalOutFlow,
