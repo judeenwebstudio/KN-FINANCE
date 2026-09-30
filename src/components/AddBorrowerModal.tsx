@@ -3,10 +3,15 @@ import { X, Phone, Upload, Trash2, Plus, AlertCircle, FileText, Image as ImageIc
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
-import { calculateBorrowerEndDate, parseCustomDate } from '../utils/loanCalculations';
+import {
+  calculateBorrowerEndDate,
+  parseCustomDate,
+  calculateAgentCommission,
+  calculateDeductedAmount,
+  calculateNetAmountGiven,
+} from '../utils/loanCalculations';
 import { COLLECTION_METHODS } from '../types';
 import type { Timeframe, Borrower, NewBorrowerInput, CollectionMethod } from '../types';
-import { useModalBackHandler } from '../utils/useModalBackHandler';
 
 interface AddBorrowerModalProps {
   isOpen: boolean;
@@ -50,8 +55,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   initialBorrower,
   onUpdate,
 }) => {
-  useModalBackHandler(isOpen, onClose);
-
   const { addBorrower, timeframe, borrowers, agents, settings, collectionLines, currentUser, currentRole, isCloudAuth } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,10 +79,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [collectionLine, setCollectionLine] = useState<string>('');
   const [collectionMethod, setCollectionMethod] = useState<CollectionMethod>('Hand Cash');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
-  const [agentCommission, setAgentCommission] = useState('0');
   const [parcelTokenMode, setParcelTokenMode] = useState(false);
   const [loanAmount, setLoanAmount] = useState('');
-  const [deductedAmount, setDeductedAmount] = useState('');
   const [expectedReturn, setExpectedReturn] = useState('');
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
   const [startDateIso, setStartDateIso] = useState(getTodayIsoDate());
@@ -123,6 +124,24 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return !isPresentInActive ? lineName : null;
   }, [initialBorrower, activeLines]);
 
+  // Derived financial values: Auto 5% Agent Commission, Auto 7% Deducted Amount, Canonical Net Amount Given
+  const parsedLoanAmount = useMemo(() => {
+    const val = parseFloat(loanAmount);
+    return isNaN(val) || val <= 0 ? 0 : val;
+  }, [loanAmount]);
+
+  const autoAgentCommission = useMemo(() => {
+    return calculateAgentCommission(parsedLoanAmount);
+  }, [parsedLoanAmount]);
+
+  const autoDeductedAmount = useMemo(() => {
+    return calculateDeductedAmount(parsedLoanAmount);
+  }, [parsedLoanAmount]);
+
+  const calculatedNetAmountGiven = useMemo(() => {
+    return calculateNetAmountGiven(parsedLoanAmount, autoDeductedAmount, autoAgentCommission);
+  }, [parsedLoanAmount, autoDeductedAmount, autoAgentCommission]);
+
   // Reset or sync when opened
   useEffect(() => {
     if (isOpen) {
@@ -143,14 +162,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
           ? currentUser.companyUserId
           : (initialBorrower.agentId || '');
         setSelectedAgentId(targetAgentId);
-        setAgentCommission(
-          initialBorrower.agentCommission !== undefined
-            ? initialBorrower.agentCommission.toString()
-            : (targetAgentId ? '500' : '0')
-        );
         setParcelTokenMode(Boolean(initialBorrower.parcelTokenMode));
         setLoanAmount((initialBorrower.loanAmount || initialBorrower.amount || '').toString());
-        setDeductedAmount((initialBorrower.deductedAmount || '0').toString());
         setExpectedReturn((initialBorrower.expectedReturn || '').toString());
         setRepaymentDuration(initialBorrower.repaymentDuration || '50 Days');
         setIsExistingLoan(Boolean(initialBorrower.isExistingLoan));
@@ -176,9 +189,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
           ? currentUser.companyUserId
           : '';
         setSelectedAgentId(targetAgentId);
-        setAgentCommission('0');
         setLoanAmount('');
-        setDeductedAmount('');
         setExpectedReturn('');
         setParcelTokenMode(false);
         setIsExistingLoan(false);
@@ -207,18 +218,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     }
   };
 
-  // When agent selection changes, auto-set default commission
   const handleAgentChange = (newAgentId: string) => {
     setSelectedAgentId(newAgentId);
-    if (newAgentId) {
-      // If setting an agent and current commission is 0 or empty, default to 500
-      if (!agentCommission || parseFloat(agentCommission) === 0) {
-        setAgentCommission('500');
-      }
-    } else {
-      // If agent is removed, reset commission to 0
-      setAgentCommission('0');
-    }
   };
 
   // Interest calculation
@@ -234,15 +235,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     // Format nicely without excessive trailing decimals
     return Number.isInteger(rate) ? `${rate}%` : `${rate.toFixed(2)}%`;
   }, [loanAmount, expectedReturn]);
-
-  // Net Amount Given calculation: Loan Amount - Deducted Amount - Agent Commission
-  const calculatedNetAmountGiven = useMemo(() => {
-    const loan = parseFloat(loanAmount) || 0;
-    const deducted = parseFloat(deductedAmount) || 0;
-    const commission = parseFloat(agentCommission) || 0;
-    const net = Math.max(0, loan - deducted - commission);
-    return net;
-  }, [loanAmount, deductedAmount, agentCommission]);
 
   // End Date calculation
   const calculatedEndDate = useMemo(() => {
@@ -297,20 +289,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     const loanVal = parseFloat(loanAmount);
     if (!loanAmount.trim() || isNaN(loanVal) || loanVal <= 0) {
       newErrors.loanAmount = 'Valid Loan Amount is required';
-    }
-
-    const deductedVal = parseFloat(deductedAmount || '0');
-    if (!isNaN(loanVal) && !isNaN(deductedVal) && deductedVal > loanVal) {
-      newErrors.deductedAmount = 'Deducted amount cannot exceed loan amount';
-    } else if (deductedVal < 0) {
-      newErrors.deductedAmount = 'Deducted amount cannot be negative';
-    }
-
-    const commissionVal = parseFloat(agentCommission || '0');
-    if (isNaN(commissionVal) || commissionVal < 0) {
-      newErrors.agentCommission = 'Agent Commission cannot be negative';
-    } else if (!isNaN(loanVal) && !isNaN(deductedVal) && (deductedVal + commissionVal > loanVal)) {
-      newErrors.agentCommission = 'Total deductions (Deducted Amount + Commission) cannot exceed Loan Amount';
     }
 
     const expReturnVal = parseFloat(expectedReturn);
@@ -411,8 +389,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
     const numBookNo = parseInt(bookNo, 10);
     const loanVal = parseFloat(loanAmount);
-    const deductedVal = parseFloat(deductedAmount || '0');
-    const commissionVal = parseFloat(agentCommission || '0');
     const expReturnVal = parseFloat(expectedReturn);
     const interestVal = parseFloat(calculatedInterestRate?.replace('%', '') || '0');
 
@@ -432,10 +408,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       collectionLine: collectionLine ? collectionLine.trim() : null,
       collectionMethod: collectionMethod ? collectionMethod.trim() : 'Hand Cash',
       agentId: targetAgentId,
-      agentCommission: commissionVal,
+      agentCommission: autoAgentCommission,
       parcelTokenMode,
       loanAmount: loanVal,
-      deductedAmount: deductedVal,
+      deductedAmount: autoDeductedAmount,
       netAmountGiven: calculatedNetAmountGiven,
       expectedReturn: expReturnVal,
       interestRate: interestVal,
@@ -483,9 +459,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     setAlternatePhoneNumber('');
     setAddress('');
     setSelectedAgentId('');
-    setAgentCommission('0');
     setLoanAmount('');
-    setDeductedAmount('');
     setExpectedReturn('');
     setSelectedFiles([]);
     setUploadingDocs(false);
@@ -499,8 +473,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-sm">
-      {/* Modal Container: centered, 700px - 800px width on desktop, max-h 85-90vh */}
-      <div className="w-full max-w-[760px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      {/* Modal Container: centered, max-w-[820px] on desktop, max-h 90vh */}
+      <div className="w-full max-w-[820px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header - Fixed at Top */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white z-10">
           <div>
@@ -646,8 +620,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               Loan Configuration
             </h3>
 
-            {/* Finance Type, Dynamic Schedule, Assign to Agent, Agent Commission, Parcel Token Mode */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+            {/* Finance Type, Dynamic Schedule, Assign to Agent, Line, Collection Method, Parcel Token Mode */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
               {/* Finance Type */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
@@ -812,25 +786,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 )}
               </div>
 
-              {/* Agent Commission */}
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                  Agent Commission (₹)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={agentCommission}
-                  onChange={(e) => setAgentCommission(e.target.value)}
-                  placeholder="e.g. 500"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] transition-all"
-                />
-                {errors.agentCommission && (
-                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.agentCommission}</p>
-                )}
-              </div>
-
               {/* Parcel Token Mode */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
@@ -859,11 +814,11 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               </div>
             </div>
 
-            {/* 8, 9, 10, 11: Amounts & Interest Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* 8. Loan Amount */}
+            {/* Financial Amounts: Loan Amount | Agent Commission | Deducted Amount | Expected Return */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 items-start">
+              {/* 1. Loan Amount */}
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Loan Amount (₹) <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -872,36 +827,45 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                   step="any"
                   value={loanAmount}
                   onChange={(e) => setLoanAmount(e.target.value)}
-                  placeholder="e.g. 10,000"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] transition-all"
+                  placeholder="e.g. 10000"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
                 />
                 {errors.loanAmount && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.loanAmount}</p>
                 )}
               </div>
 
-              {/* 9. Deducted Amount */}
+              {/* 2. Agent Commission (Auto 5% - Read-Only) */}
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                  Agent Commission (₹)
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={parsedLoanAmount > 0 ? autoAgentCommission.toLocaleString('en-IN') : '0'}
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
+                />
+              </div>
+
+              {/* 3. Deducted Amount (Auto 7% - Read-Only) */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Deducted Amount (₹)
                 </label>
                 <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={deductedAmount}
-                  onChange={(e) => setDeductedAmount(e.target.value)}
-                  placeholder="e.g. 200"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] transition-all"
+                  type="text"
+                  readOnly
+                  disabled
+                  value={parsedLoanAmount > 0 ? autoDeductedAmount.toLocaleString('en-IN') : '0'}
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
                 />
-                {errors.deductedAmount && (
-                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.deductedAmount}</p>
-                )}
               </div>
 
-              {/* 10. Expected Return */}
+              {/* 4. Expected Return */}
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Expected Return (₹) <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -910,15 +874,18 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                   step="any"
                   value={expectedReturn}
                   onChange={(e) => setExpectedReturn(e.target.value)}
-                  placeholder="e.g. 10,500"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] transition-all"
+                  placeholder="e.g. 10500"
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
                 />
                 {errors.expectedReturn && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.expectedReturn}</p>
                 )}
               </div>
+            </div>
 
-              {/* 11. Interest Rate (AUTO-CALCULATED) */}
+            {/* Interest Rate, Repayment Duration, Start Date, End Date */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Interest Rate (AUTO-CALCULATED) */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Interest Rate (%)
@@ -929,11 +896,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* 12, 13, 14: Duration, Start Date, End Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* 12. Repayment Duration */}
+              {/* Repayment Duration */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Repayment Duration <span className="text-red-500">*</span>
@@ -954,7 +918,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 )}
               </div>
 
-              {/* 13. Start Date */}
+              {/* Start Date */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   Start Date <span className="text-red-500">*</span>
@@ -984,7 +948,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 )}
               </div>
 
-              {/* 14. End Date (AUTO-CALCULATED) */}
+              {/* End Date (AUTO-CALCULATED) */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                   End Date

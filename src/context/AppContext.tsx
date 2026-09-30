@@ -20,6 +20,11 @@ import type {
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
 import {
+  calculateAgentCommission,
+  calculateDeductedAmount,
+  calculateNetAmountGiven,
+} from '../utils/loanCalculations';
+import {
   loginWithPin,
   restoreCloudSession,
   signOutOfCloud,
@@ -1245,6 +1250,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? currentUser.companyUserId
       : (data.agentId || null);
 
+    const loanAmt = Number(data.loanAmount) || 0;
+    const agentComm = calculateAgentCommission(loanAmt);
+    const deductedAmt = calculateDeductedAmount(loanAmt);
+    const netAmt = calculateNetAmountGiven(loanAmt, deductedAmt, agentComm);
+
     if (isCloudAuth && currentUser && supabase) {
       try {
         const startIso = toDbDate(data.startDate) || getTodayIsoDate();
@@ -1265,10 +1275,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             collection_line: data.collectionLine ? data.collectionLine.trim() : null,
             collection_method: data.collectionMethod ? data.collectionMethod.trim() : null,
             assigned_agent_id: assignedAgentId,
-            loan_amount: data.loanAmount,
-            deducted_amount: data.deductedAmount,
-            agent_commission: Number(data.agentCommission) || 0,
-            net_amount_given: data.netAmountGiven,
+            loan_amount: loanAmt,
+            deducted_amount: deductedAmt,
+            agent_commission: agentComm,
+            net_amount_given: netAmt,
             expected_return: data.expectedReturn,
             interest_rate: data.interestRate,
             repayment_duration: data.repaymentDuration,
@@ -1322,16 +1332,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: Date.now().toString(),
       bookNo: parsedBookNo,
       ...data,
-      netAmountGiven: data.netAmountGiven !== undefined ? data.netAmountGiven : Math.max(0, (Number(data.loanAmount) || 0) - (Number(data.deductedAmount) || 0) - (Number(data.agentCommission) || 0)),
+      netAmountGiven: netAmt,
       weeklyCollectionDay: data.financeType === 'Weekly' && data.weeklyCollectionDay ? Number(data.weeklyCollectionDay) : null,
       monthlyCollectionDay: data.financeType === 'Monthly' && data.monthlyCollectionDay ? Number(data.monthlyCollectionDay) : null,
       collectionLine: data.collectionLine ? data.collectionLine.trim() : null,
       collectionMethod: data.collectionMethod ? data.collectionMethod.trim() : null,
       agentId: resolvedAgentId,
-      agentCommission: Number(data.agentCommission) || 0,
+      agentCommission: agentComm,
+      deductedAmount: deductedAmt,
       name: data.borrowerName,
       phone: data.phoneNumber,
-      amount: data.loanAmount,
+      amount: loanAmt,
+      loanAmount: loanAmt,
       status: 'active',
       dateAdded: now,
       createdAt: now,
@@ -1339,7 +1351,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBorrowers(prev => [newBorrower, ...prev]);
 
     const loanDisbursedAmt = newBorrower.loanAmount || newBorrower.amount || 0;
-    const deductedAmt = newBorrower.deductedAmount || 0;
+    const fallbackDeductedAmt = newBorrower.deductedAmount || 0;
 
     if (loanDisbursedAmt > 0) {
       const ledgerEntry: CashLedgerEntry = {
@@ -1363,12 +1375,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    if (deductedAmt > 0) {
+    if (fallbackDeductedAmt > 0) {
       const deductionEntry: CashLedgerEntry = {
         id: `cash_deduct_${newBorrower.id}_${Date.now()}`,
         companyId: currentUser?.companyId,
         transactionType: 'DEDUCTED_AMOUNT',
-        amount: deductedAmt,
+        amount: fallbackDeductedAmt,
         sourceType: 'DEDUCTION',
         borrowerId: newBorrower.id,
         borrowerName: newBorrower.borrowerName,
@@ -1402,6 +1414,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsedBookNo = data.bookNo !== undefined && data.bookNo !== null ? Number(data.bookNo) : null;
         const startIso = toDbDate(data.startDate);
         const endIso = toDbDate(data.endDate);
+        const loanAmt = data.loanAmount !== undefined ? Number(data.loanAmount) : null;
+        const agentComm = loanAmt !== null ? calculateAgentCommission(loanAmt) : (data.agentCommission !== undefined ? Number(data.agentCommission) : 0);
+        const deductedAmt = loanAmt !== null ? calculateDeductedAmount(loanAmt) : (data.deductedAmount !== undefined ? Number(data.deductedAmount) : 0);
 
         const { data: rpcData, error: rpcErr } = await (supabase as any)
           .rpc('edit_borrower_record', {
@@ -1414,9 +1429,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             p_collection_line: data.collectionLine ? data.collectionLine.trim() : null,
             p_assigned_agent_id: data.agentId || null,
             p_collection_method: data.collectionMethod ? data.collectionMethod.trim() : 'Hand Cash',
-            p_loan_amount: data.loanAmount !== undefined ? Number(data.loanAmount) : null,
-            p_deducted_amount: data.deductedAmount !== undefined ? Number(data.deductedAmount) : 0,
-            p_agent_commission: data.agentCommission !== undefined ? Number(data.agentCommission) : 0,
+            p_loan_amount: loanAmt,
+            p_deducted_amount: deductedAmt,
+            p_agent_commission: agentComm,
             p_expected_return: data.expectedReturn !== undefined ? Number(data.expectedReturn) : null,
             p_interest_rate: data.interestRate !== undefined ? Number(data.interestRate) : null,
             p_finance_type: data.financeType || 'Daily',
@@ -1449,10 +1464,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = borrowers.find(b => b.id === id);
     const updatedName = data.borrowerName !== undefined ? data.borrowerName.trim() : (target?.borrowerName || target?.name || 'Borrower');
     const loanAmt = data.loanAmount !== undefined ? Number(data.loanAmount) : (target?.loanAmount || target?.amount || 0);
-    const deductedAmt = data.deductedAmount !== undefined ? Number(data.deductedAmount) : (target?.deductedAmount || 0);
-    const agentComm = data.agentCommission !== undefined ? Number(data.agentCommission) : (target?.agentCommission || 0);
+    const deductedAmt = calculateDeductedAmount(loanAmt);
+    const agentComm = calculateAgentCommission(loanAmt);
     const expReturn = data.expectedReturn !== undefined ? Number(data.expectedReturn) : (target?.expectedReturn || loanAmt);
-    const netAmt = data.netAmountGiven !== undefined ? data.netAmountGiven : Math.max(0, loanAmt - deductedAmt - agentComm);
+    const netAmt = calculateNetAmountGiven(loanAmt, deductedAmt, agentComm);
 
     const totalPaidSoFar = payments
       .filter(p => p.borrowerId === id)
