@@ -83,6 +83,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [parcelTokenMode, setParcelTokenMode] = useState(false);
   const [loanAmount, setLoanAmount] = useState('');
+  const [agentCommission, setAgentCommission] = useState('');
+  const [deductedAmount, setDeductedAmount] = useState('');
   const [expectedReturn, setExpectedReturn] = useState('');
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
   const [startDateIso, setStartDateIso] = useState(getTodayIsoDate());
@@ -126,11 +128,13 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return !isPresentInActive ? lineName : null;
   }, [initialBorrower, activeLines]);
 
-  // Derived financial values: Auto 5% Agent Commission, Auto 7% Deducted Amount, Canonical Net Amount Given
+  // Financial calculations
   const parsedLoanAmount = useMemo(() => {
     const val = parseFloat(loanAmount);
     return isNaN(val) || val <= 0 ? 0 : val;
   }, [loanAmount]);
+
+  const isAutoFinanceType = financeType === 'Daily' || financeType === 'Weekly';
 
   const autoAgentCommission = useMemo(() => {
     return calculateAgentCommission(parsedLoanAmount);
@@ -140,9 +144,25 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return calculateDeductedAmount(parsedLoanAmount);
   }, [parsedLoanAmount]);
 
+  const effectiveAgentCommission = useMemo(() => {
+    if (isAutoFinanceType) {
+      return autoAgentCommission;
+    }
+    const val = parseFloat(agentCommission);
+    return isNaN(val) || val < 0 ? 0 : val;
+  }, [isAutoFinanceType, autoAgentCommission, agentCommission]);
+
+  const effectiveDeductedAmount = useMemo(() => {
+    if (isAutoFinanceType) {
+      return autoDeductedAmount;
+    }
+    const val = parseFloat(deductedAmount);
+    return isNaN(val) || val < 0 ? 0 : val;
+  }, [isAutoFinanceType, autoDeductedAmount, deductedAmount]);
+
   const calculatedNetAmountGiven = useMemo(() => {
-    return calculateNetAmountGiven(parsedLoanAmount, autoDeductedAmount, autoAgentCommission);
-  }, [parsedLoanAmount, autoDeductedAmount, autoAgentCommission]);
+    return calculateNetAmountGiven(parsedLoanAmount, effectiveDeductedAmount, effectiveAgentCommission);
+  }, [parsedLoanAmount, effectiveDeductedAmount, effectiveAgentCommission]);
 
   // Reset or sync when opened
   useEffect(() => {
@@ -166,6 +186,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setSelectedAgentId(targetAgentId);
         setParcelTokenMode(Boolean(initialBorrower.parcelTokenMode));
         setLoanAmount((initialBorrower.loanAmount || initialBorrower.amount || '').toString());
+        setAgentCommission(initialBorrower.agentCommission !== undefined && initialBorrower.agentCommission !== null ? String(initialBorrower.agentCommission) : '');
+        setDeductedAmount(initialBorrower.deductedAmount !== undefined && initialBorrower.deductedAmount !== null ? String(initialBorrower.deductedAmount) : '');
         setExpectedReturn((initialBorrower.expectedReturn || '').toString());
         setRepaymentDuration(initialBorrower.repaymentDuration || '50 Days');
         setIsExistingLoan(Boolean(initialBorrower.isExistingLoan));
@@ -192,6 +214,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
           : '';
         setSelectedAgentId(targetAgentId);
         setLoanAmount('');
+        setAgentCommission('');
+        setDeductedAmount('');
         setExpectedReturn('');
         setParcelTokenMode(false);
         setIsExistingLoan(false);
@@ -204,7 +228,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     }
   }, [isOpen, timeframe, initialBorrower, settings?.defaultFinanceType]);
 
-  // When financeType changes, adjust repaymentDuration default
+  // When financeType changes, adjust repaymentDuration default and commission/deduction values
   const handleFinanceTypeChange = (newType: Timeframe) => {
     setFinanceType(newType);
     const options = DURATION_OPTIONS[newType];
@@ -218,6 +242,31 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
       }
     }
+
+    if (newType === 'Daily' || newType === 'Weekly') {
+      // Monthly -> Daily/Weekly: Replace manual values with current Loan Amount * 5% and * 7%
+      const comm = calculateAgentCommission(parsedLoanAmount);
+      const ded = calculateDeductedAmount(parsedLoanAmount);
+      setAgentCommission(comm > 0 ? String(comm) : '');
+      setDeductedAmount(ded > 0 ? String(ded) : '');
+    } else if (newType === 'Monthly') {
+      // Daily/Weekly -> Monthly: Switch to editable manual inputs without auto recalculation
+      if (!agentCommission && parsedLoanAmount > 0) {
+        const comm = calculateAgentCommission(parsedLoanAmount);
+        if (comm > 0) setAgentCommission(String(comm));
+      }
+      if (!deductedAmount && parsedLoanAmount > 0) {
+        const ded = calculateDeductedAmount(parsedLoanAmount);
+        if (ded > 0) setDeductedAmount(String(ded));
+      }
+    }
+
+    setErrors((prev) => {
+      const copy = { ...prev };
+      delete copy.agentCommission;
+      delete copy.deductedAmount;
+      return copy;
+    });
   };
 
   const handleAgentChange = (newAgentId: string) => {
@@ -318,6 +367,24 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       if (!monthlyCollectionDay || monthlyCollectionDay < 1 || monthlyCollectionDay > 31) {
         newErrors.monthlyCollectionDay = 'Collection Date is required';
       }
+
+      const commVal = agentCommission.trim() === '' ? 0 : parseFloat(agentCommission);
+      if (agentCommission.trim() !== '' && (isNaN(commVal) || commVal < 0)) {
+        newErrors.agentCommission = 'Commission cannot be negative';
+      }
+
+      const dedVal = deductedAmount.trim() === '' ? 0 : parseFloat(deductedAmount);
+      if (deductedAmount.trim() !== '' && (isNaN(dedVal) || dedVal < 0)) {
+        newErrors.deductedAmount = 'Deducted amount cannot be negative';
+      }
+
+      if (!isNaN(loanVal) && loanVal > 0) {
+        const c = isNaN(commVal) || commVal < 0 ? 0 : commVal;
+        const d = isNaN(dedVal) || dedVal < 0 ? 0 : dedVal;
+        if ((c + d) > loanVal) {
+          newErrors.deductedAmount = 'Commission + Deducted Amount cannot exceed Loan Amount';
+        }
+      }
     }
 
     if (activeLines.length === 0 && !inactiveAssignedLine) {
@@ -410,10 +477,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       collectionLine: collectionLine ? collectionLine.trim() : null,
       collectionMethod: collectionMethod ? collectionMethod.trim() : 'Hand Cash',
       agentId: targetAgentId,
-      agentCommission: autoAgentCommission,
+      agentCommission: effectiveAgentCommission,
       parcelTokenMode,
       loanAmount: loanVal,
-      deductedAmount: autoDeductedAmount,
+      deductedAmount: effectiveDeductedAmount,
       netAmountGiven: calculatedNetAmountGiven,
       expectedReturn: expReturnVal,
       interestRate: interestVal,
@@ -837,32 +904,86 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 )}
               </div>
 
-              {/* 2. Agent Commission (Auto 5% - Read-Only) */}
+              {/* 2. Agent Commission */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Agent Commission (₹)
                 </label>
-                <input
-                  type="text"
-                  readOnly
-                  disabled
-                  value={parsedLoanAmount > 0 ? autoAgentCommission.toLocaleString('en-IN') : '0'}
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
-                />
+                {isAutoFinanceType ? (
+                  <input
+                    type="text"
+                    readOnly
+                    disabled
+                    value={parsedLoanAmount > 0 ? autoAgentCommission.toLocaleString('en-IN') : '0'}
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={agentCommission}
+                    onChange={(e) => {
+                      setAgentCommission(e.target.value);
+                      if (errors.agentCommission || errors.deductedAmount) {
+                        setErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.agentCommission;
+                          delete copy.deductedAmount;
+                          return copy;
+                        });
+                      }
+                    }}
+                    placeholder="e.g. 300"
+                    className={`w-full h-11 px-3.5 rounded-xl border ${
+                      errors.agentCommission ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                    } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
+                  />
+                )}
+                {errors.agentCommission && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.agentCommission}</p>
+                )}
               </div>
 
-              {/* 3. Deducted Amount (Auto 7% - Read-Only) */}
+              {/* 3. Deducted Amount */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Deducted Amount (₹)
                 </label>
-                <input
-                  type="text"
-                  readOnly
-                  disabled
-                  value={parsedLoanAmount > 0 ? autoDeductedAmount.toLocaleString('en-IN') : '0'}
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
-                />
+                {isAutoFinanceType ? (
+                  <input
+                    type="text"
+                    readOnly
+                    disabled
+                    value={parsedLoanAmount > 0 ? autoDeductedAmount.toLocaleString('en-IN') : '0'}
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={deductedAmount}
+                    onChange={(e) => {
+                      setDeductedAmount(e.target.value);
+                      if (errors.agentCommission || errors.deductedAmount) {
+                        setErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.agentCommission;
+                          delete copy.deductedAmount;
+                          return copy;
+                        });
+                      }
+                    }}
+                    placeholder="e.g. 400"
+                    className={`w-full h-11 px-3.5 rounded-xl border ${
+                      errors.deductedAmount ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                    } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
+                  />
+                )}
+                {errors.deductedAmount && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.deductedAmount}</p>
+                )}
               </div>
 
               {/* 4. Expected Return */}
