@@ -1415,8 +1415,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const startIso = toDbDate(data.startDate);
         const endIso = toDbDate(data.endDate);
         const loanAmt = data.loanAmount !== undefined ? Number(data.loanAmount) : null;
-        const agentComm = loanAmt !== null ? calculateAgentCommission(loanAmt) : (data.agentCommission !== undefined ? Number(data.agentCommission) : 0);
-        const deductedAmt = loanAmt !== null ? calculateDeductedAmount(loanAmt) : (data.deductedAmount !== undefined ? Number(data.deductedAmount) : 0);
+        const agentComm = data.agentCommission !== undefined ? Number(data.agentCommission) : 0;
+        const deductedAmt = data.deductedAmount !== undefined ? Number(data.deductedAmount) : 0;
 
         const { data: rpcData, error: rpcErr } = await (supabase as any)
           .rpc('edit_borrower_record', {
@@ -1464,10 +1464,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = borrowers.find(b => b.id === id);
     const updatedName = data.borrowerName !== undefined ? data.borrowerName.trim() : (target?.borrowerName || target?.name || 'Borrower');
     const loanAmt = data.loanAmount !== undefined ? Number(data.loanAmount) : (target?.loanAmount || target?.amount || 0);
-    const deductedAmt = calculateDeductedAmount(loanAmt);
-    const agentComm = calculateAgentCommission(loanAmt);
+    const deductedAmt = data.deductedAmount !== undefined ? Number(data.deductedAmount) : (target?.deductedAmount || 0);
+    const agentComm = data.agentCommission !== undefined ? Number(data.agentCommission) : (target?.agentCommission || 0);
     const expReturn = data.expectedReturn !== undefined ? Number(data.expectedReturn) : (target?.expectedReturn || loanAmt);
-    const netAmt = calculateNetAmountGiven(loanAmt, deductedAmt, agentComm);
+    const netAmt = data.netAmountGiven !== undefined ? data.netAmountGiven : Math.max(0, loanAmt - deductedAmt - agentComm);
 
     const totalPaidSoFar = payments
       .filter(p => p.borrowerId === id)
