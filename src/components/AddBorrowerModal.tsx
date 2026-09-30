@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Phone, Upload, Trash2, Plus, AlertCircle, FileText, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useModalBackHandler } from '../utils/useModalBackHandler';
 import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
 import {
@@ -56,6 +57,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   onUpdate,
 }) => {
   const { addBorrower, timeframe, borrowers, agents, settings, collectionLines, currentUser, currentRole, isCloudAuth } = useApp();
+  useModalBackHandler(isOpen, onClose);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active collection lines for borrower assignment
