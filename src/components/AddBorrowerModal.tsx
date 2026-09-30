@@ -473,8 +473,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-sm">
-      {/* Modal Container: centered, 700px - 800px width on desktop, max-h 85-90vh */}
-      <div className="w-full max-w-[760px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      {/* Modal Container: centered, max-w-[820px] on desktop, max-h 90vh */}
+      <div className="w-full max-w-[820px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header - Fixed at Top */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white z-10">
           <div>
@@ -814,11 +814,11 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               </div>
             </div>
 
-            {/* Financial Amounts: Loan Amount | Agent Commission (5%) | Deducted Amount (7%) | Expected Return */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Financial Amounts: Loan Amount | Agent Commission | Deducted Amount | Expected Return */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 items-start">
               {/* 1. Loan Amount */}
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Loan Amount (₹) <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -837,14 +837,9 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
               {/* 2. Agent Commission (Auto 5% - Read-Only) */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs sm:text-sm font-semibold text-[#1e293b]">
-                    Agent Commission (₹)
-                  </label>
-                  <span className="text-[11px] font-bold text-[#4f46e5] bg-indigo-50 px-1.5 py-0.5 rounded">
-                    5% Auto
-                  </span>
-                </div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                  Agent Commission (₹)
+                </label>
                 <input
                   type="text"
                   readOnly
@@ -856,14 +851,9 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
               {/* 3. Deducted Amount (Auto 7% - Read-Only) */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs sm:text-sm font-semibold text-[#1e293b]">
-                    Deducted Amount (₹)
-                  </label>
-                  <span className="text-[11px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">
-                    7% Auto
-                  </span>
-                </div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                  Deducted Amount (₹)
+                </label>
                 <input
                   type="text"
                   readOnly
@@ -875,7 +865,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
               {/* 4. Expected Return */}
               <div>
-                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Expected Return (₹) <span className="text-red-500">*</span>
                 </label>
                 <input

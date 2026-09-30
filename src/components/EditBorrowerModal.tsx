@@ -403,7 +403,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
   return (
     <>
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-        <div className="w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="w-full max-w-[820px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
           {/* Header */}
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white z-10">
             <div>
@@ -725,11 +725,11 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
                 </div>
               </div>
 
-              {/* Row 2: Financial Amounts: Loan Amount | Agent Commission (5%) | Deducted Amount (7%) | Expected Return */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Row 2: Financial Amounts: Loan Amount | Agent Commission | Deducted Amount | Expected Return */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 items-start">
                 {/* 1. Loan Amount */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
+                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                     Loan Amount (₹) <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -751,14 +751,9 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
 
                 {/* 2. Agent Commission (5% Auto - Read-Only) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-[#1e293b]">
-                      Agent Commission (₹)
-                    </label>
-                    <span className="text-[10px] font-bold text-[#4f46e5] bg-indigo-50 px-1.5 py-0.5 rounded">
-                      5% Auto
-                    </span>
-                  </div>
+                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                    Agent Commission (₹)
+                  </label>
                   <input
                     type="text"
                     readOnly
@@ -770,14 +765,9 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
 
                 {/* 3. Deducted Amount (7% Auto - Read-Only) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-[#1e293b]">
-                      Deducted Amount (₹)
-                    </label>
-                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">
-                      7% Auto
-                    </span>
-                  </div>
+                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                    Deducted Amount (₹)
+                  </label>
                   <input
                     type="text"
                     readOnly
@@ -789,7 +779,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
 
                 {/* 4. Expected Return */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
+                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                     Expected Return (₹) <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -799,7 +789,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
                     required
                     value={expectedReturn}
                     onChange={(e) => setExpectedReturn(e.target.value)}
-                    placeholder="e.g. 24000"
+                    placeholder="e.g. 21000"
                     className={`w-full h-10 px-3.5 rounded-xl border ${
                       errors.expectedReturn ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
                     } text-sm font-semibold focus:outline-none focus:border-[#4f46e5]`}
