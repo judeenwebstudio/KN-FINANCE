@@ -60,6 +60,34 @@ export function formatDisplayDate(isoOrFormatted: string): string {
   return `${dd} ${mmm} ${yyyy}`;
 }
 
+export const AGENT_COMMISSION_RATE = 0.05; // 5%
+export const DEDUCTED_AMOUNT_RATE = 0.07; // 7%
+
+export function calculateAgentCommission(loanAmount: number): number {
+  if (!loanAmount || isNaN(loanAmount) || loanAmount <= 0) return 0;
+  return Math.round(loanAmount * AGENT_COMMISSION_RATE * 100) / 100;
+}
+
+export function calculateDeductedAmount(loanAmount: number): number {
+  if (!loanAmount || isNaN(loanAmount) || loanAmount <= 0) return 0;
+  return Math.round(loanAmount * DEDUCTED_AMOUNT_RATE * 100) / 100;
+}
+
+export function calculateNetAmountGiven(
+  loanAmount: number,
+  deductedAmount?: number,
+  agentCommission?: number
+): number {
+  const loan = !loanAmount || isNaN(loanAmount) || loanAmount <= 0 ? 0 : loanAmount;
+  const deducted = deductedAmount !== undefined && !isNaN(deductedAmount)
+    ? deductedAmount
+    : calculateDeductedAmount(loan);
+  const commission = agentCommission !== undefined && !isNaN(agentCommission)
+    ? agentCommission
+    : calculateAgentCommission(loan);
+  return Math.max(0, Math.round((loan - deducted - commission) * 100) / 100);
+}
+
 // ==========================================
 // REPAYMENT SCHEDULE & INSTALLMENT TYPES
 // ==========================================
