@@ -22,6 +22,7 @@ import { FinancialAnalyticsModal } from './FinancialAnalyticsModal';
 import { BorrowerDetailsModal } from './BorrowerDetailsModal';
 import { CashInHandModal } from './CashInHandModal';
 import { OutFlowModal } from './OutFlowModal';
+import { AgentCommissionModal } from './AgentCommissionModal';
 import { resolveAgentName } from '../utils/agentUtils';
 import { getCurrentActionableDue, getTodayIsoDate, formatCollectionSchedule } from '../utils/loanCalculations';
 import { formatAppDate } from '../utils/dateUtils';
@@ -63,6 +64,7 @@ export const DashboardScreen: React.FC = () => {
   const [isFinancialAnalyticsModalOpen, setIsFinancialAnalyticsModalOpen] = useState(false);
   const [isCashInHandModalOpen, setIsCashInHandModalOpen] = useState(false);
   const [isOutFlowModalOpen, setIsOutFlowModalOpen] = useState(false);
+  const [isAgentCommissionModalOpen, setIsAgentCommissionModalOpen] = useState(false);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
   const [restoreSuccessToast, setRestoreSuccessToast] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -312,7 +314,17 @@ export const DashboardScreen: React.FC = () => {
           </div>
 
           {/* CARD 3: Agent Commission */}
-          <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-indigo-100/80 hover:border-indigo-300 hover:shadow-lg transition-all flex flex-col justify-between group">
+          <div
+            onClick={() => setIsAgentCommissionModalOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                setIsAgentCommissionModalOpen(true);
+              }
+            }}
+            className="bg-white rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-indigo-100/80 hover:border-indigo-300 hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer group flex flex-col justify-between"
+          >
             <div className="flex items-center justify-between mb-4">
               <div>
                 <span className="text-xs sm:text-sm font-bold tracking-wide uppercase text-[#4f46e5] group-hover:text-[#4338ca] transition-colors">
@@ -641,6 +653,13 @@ export const DashboardScreen: React.FC = () => {
       <OutFlowModal
         isOpen={isOutFlowModalOpen}
         onClose={() => setIsOutFlowModalOpen(false)}
+      />
+
+      {/* Agent Commission Details Modal (Manager & Agent) */}
+      <AgentCommissionModal
+        isOpen={isAgentCommissionModalOpen}
+        onClose={() => setIsAgentCommissionModalOpen(false)}
+        onSelectBorrower={(borrowerId) => setSelectedBorrowerId(borrowerId)}
       />
     </div>
   );
