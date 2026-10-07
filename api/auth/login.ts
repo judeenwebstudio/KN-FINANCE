@@ -125,17 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           serviceRoleKey
         )}`
       );
-      return res.status(500).json({
-        error: 'Authentication service temporarily unavailable.',
-        diag: {
-          hasUrl: Boolean(supabaseUrl),
-          hasServiceRole: Boolean(serviceRoleKey),
-          hasAnon: Boolean(anonKey),
-          vercelEnv: process.env.VERCEL_ENV || 'unknown',
-          vercelGitRef: process.env.VERCEL_GIT_COMMIT_REF || 'unknown',
-          vercelUrl: process.env.VERCEL_URL || 'unknown',
-        },
-      });
+      return res.status(500).json({ error: 'Authentication service temporarily unavailable.' });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
@@ -169,10 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (error) {
       console.error('[auth/login] RPC error:', error.message);
-      return res.status(500).json({
-        error: 'Authentication service temporarily unavailable.',
-        diag: { rpcError: error.message },
-      });
+      return res.status(500).json({ error: 'Authentication service temporarily unavailable.' });
     }
 
     const authResult = Array.isArray(data) ? data[0] : data;

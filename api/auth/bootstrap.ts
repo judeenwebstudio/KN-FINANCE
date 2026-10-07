@@ -2,9 +2,30 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const anonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+// Safe dynamic environment resolution for Supabase credentials across all Vercel environments
+function getSupabaseServerEnv() {
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    '';
+
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_KEY ||
+    '';
+
+  const anonKey =
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
+
+  return { supabaseUrl, serviceRoleKey, anonKey };
+}
 
 function getClientIp(req: VercelRequest): string {
   const xRealIp = req.headers['x-real-ip'];
@@ -137,6 +158,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!cleanName) {
       return res.status(400).json({ error: 'Manager Full Name is required.' });
     }
+
+    const { supabaseUrl, serviceRoleKey } = getSupabaseServerEnv();
 
     if (!supabaseUrl || !serviceRoleKey) {
       console.error('[auth/bootstrap] Server configuration error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing.');

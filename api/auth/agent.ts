@@ -1,8 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// Safe dynamic environment resolution for Supabase credentials across all Vercel environments
+function getSupabaseServerEnv() {
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    '';
+
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_KEY ||
+    '';
+
+  return { supabaseUrl, serviceRoleKey };
+}
 
 const ALLOWED_EXACT_ORIGINS = new Set([
   'https://localhost',
@@ -69,6 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized: Authentication token is required.' });
     }
+
+    const { supabaseUrl, serviceRoleKey } = getSupabaseServerEnv();
 
     if (!supabaseUrl || !serviceRoleKey) {
       return res.status(500).json({ error: 'Server authentication configuration is missing.' });
