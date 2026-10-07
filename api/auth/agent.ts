@@ -9,6 +9,7 @@ const ALLOWED_EXACT_ORIGINS = new Set([
   'http://localhost',
   'capacitor://localhost',
   'https://kn-finance-be8m.vercel.app',
+  'https://kn.ratestack.in',
   'http://localhost:5173',
   'http://localhost:3000',
 ]);
