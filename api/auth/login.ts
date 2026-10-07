@@ -131,6 +131,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           hasUrl: Boolean(supabaseUrl),
           hasServiceRole: Boolean(serviceRoleKey),
           hasAnon: Boolean(anonKey),
+          vercelEnv: process.env.VERCEL_ENV || 'unknown',
+          vercelGitRef: process.env.VERCEL_GIT_COMMIT_REF || 'unknown',
+          vercelUrl: process.env.VERCEL_URL || 'unknown',
         },
       });
     }
