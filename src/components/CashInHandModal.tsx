@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Wallet,
@@ -11,11 +11,13 @@ import {
   AlertCircle,
   ShieldCheck,
   Info,
+  BadgePercent,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatAppDate } from '../utils/dateUtils';
-import type { CashTransactionType } from '../types';
+import { resolveAgentName } from '../utils/agentUtils';
 import { useModalBackHandler } from '../utils/useModalBackHandler';
+import type { CashTransactionType } from '../types';
 
 interface CashInHandModalProps {
   isOpen: boolean;
@@ -27,6 +29,9 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
 
   const {
     currentRole,
+    currentUser,
+    borrowers,
+    agents,
     cashLedger,
     companyCashSummary,
     getCashInHand,
@@ -44,6 +49,31 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Scoped Agent Commission records (Reporting Only)
+  const scopedCommissionRecords = useMemo(() => {
+    let filtered = borrowers;
+    if (currentRole === 'agent') {
+      const agentUserId = currentUser?.companyUserId;
+      const agentName = currentUser?.fullName?.toLowerCase();
+      filtered = borrowers.filter(
+        (b) =>
+          (agentUserId && b.agentId === agentUserId) ||
+          (!b.agentId && b.assignedAgent && agentName && b.assignedAgent.toLowerCase() === agentName)
+      );
+    } else {
+      // Manager scope: borrowers with assigned agent
+      filtered = borrowers.filter((b) =>
+        Boolean(b.agentId || (b.assignedAgent && b.assignedAgent.trim() !== ''))
+      );
+    }
+    return filtered.filter((b) => (b.agentCommission || 0) > 0);
+  }, [borrowers, currentRole, currentUser]);
+
+  const totalAgentCommission = useMemo(() => {
+    return scopedCommissionRecords.reduce((sum, b) => sum + (b.agentCommission || 0), 0);
+  }, [scopedCommissionRecords]);
+
+  // Conditional early return ONLY after ALL hooks have executed unconditionally
   if (!isOpen) return null;
 
   const currentCashInHand = getCashInHand();
@@ -175,7 +205,7 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
                 </div>
 
                 {/* 5. Cash Decreased */}
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between sm:col-span-2">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
                       <ArrowUpRight size={18} />
@@ -187,6 +217,27 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
                   </div>
                   <span className="text-sm sm:text-base font-extrabold text-amber-600 shrink-0">
                     -₹{totalDecreased.toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* 6. Agent Commission (Reporting Only) */}
+                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100/70 flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                      <BadgePercent size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-xs font-bold text-slate-800 truncate">Agent Commission</p>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700">
+                          Reporting
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Your assigned loans commission</p>
+                    </div>
+                  </div>
+                  <span className="text-sm sm:text-base font-extrabold text-indigo-700 shrink-0">
+                    ₹{totalAgentCommission.toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
@@ -484,6 +535,7 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
                   { key: 'DEDUCTED_AMOUNT', label: 'Deductions' },
                   { key: 'LOAN_DISBURSED', label: 'Disbursements' },
                   { key: 'CASH_DECREASED', label: 'Decreased' },
+                  { key: 'AGENT_COMMISSION', label: 'Agent Commission' },
                 ].map((f) => (
                   <button
                     key={f.key}
@@ -501,7 +553,84 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
               </div>
 
               {/* Transactions List */}
-              {filteredHistory.length === 0 ? (
+              {filterType === 'AGENT_COMMISSION' ? (
+                scopedCommissionRecords.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <BadgePercent size={40} className="mx-auto mb-2 opacity-40 text-indigo-400" />
+                    <p className="text-sm font-medium">No borrower agent commission records found.</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Loans with an assigned agent and non-zero commission will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    <div className="p-3 bg-indigo-50/70 border border-indigo-100/80 rounded-2xl text-[11px] text-indigo-900 flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-medium">
+                        <BadgePercent size={15} className="text-indigo-600 shrink-0" />
+                        <span>Showing borrower-wise agent commission records (Reporting Only • ₹0 Cash Flow Impact)</span>
+                      </div>
+                      <span className="font-bold text-indigo-700 shrink-0">
+                        Total: ₹{totalAgentCommission.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    {scopedCommissionRecords.map((b) => {
+                      const borrowerName = b.borrowerName || b.name || 'Unknown Borrower';
+                      const agentName = resolveAgentName(b, agents) || 'Unassigned Agent';
+                      const formattedDate = formatAppDate(
+                        (b.startDate || b.createdAt || '').substring(0, 10),
+                        settings.dateFormat
+                      );
+
+                      return (
+                        <div
+                          key={b.id}
+                          className="p-3.5 rounded-2xl bg-white border border-slate-100 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:border-slate-200 transition-all flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="mt-0.5">
+                              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
+                                <BadgePercent size={14} />
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md border bg-indigo-50 text-indigo-700 border-indigo-200">
+                                  Agent Commission
+                                </span>
+                                <span className="text-xs font-semibold text-slate-800 truncate">
+                                  Commission for {borrowerName} — Agent: {agentName}
+                                </span>
+                                {b.bookNo !== null && b.bookNo !== undefined && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
+                                    Book #{b.bookNo}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                                <span>Date: {formattedDate}</span>
+                                {b.collectionLine && (
+                                  <>
+                                    <span>•</span>
+                                    <span>Line: {b.collectionLine}</span>
+                                  </>
+                                )}
+                                <span>•</span>
+                                <span className="text-indigo-600 font-medium">Reporting Only</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-sm sm:text-base font-extrabold text-indigo-900">
+                              ₹{(b.agentCommission || 0).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : filteredHistory.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
                   <Wallet size={40} className="mx-auto mb-2 opacity-40" />
                   <p className="text-sm font-medium">No cash ledger transactions found.</p>

@@ -2,12 +2,80 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-// Initialize Supabase Admin client using server-only credentials
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const anonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+// Safe dynamic environment resolution for Supabase credentials across all Vercel environments
+function getSupabaseServerEnv() {
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    '';
 
-import { handleCors } from './_cors';
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_KEY ||
+    '';
+
+  const anonKey =
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
+
+  return { supabaseUrl, serviceRoleKey, anonKey };
+}
+
+const ALLOWED_EXACT_ORIGINS = new Set([
+  'https://localhost',
+  'http://localhost',
+  'capacitor://localhost',
+  'https://kn-finance-be8m.vercel.app',
+  'https://kn.ratestack.in',
+  'http://localhost:5173',
+  'http://localhost:3000',
+]);
+
+const VERCEL_PREVIEW_PATTERN = /^https:\/\/kn-finance[a-zA-Z0-9-]*\.vercel\.app$/;
+
+function isAllowedOrigin(origin: string): boolean {
+  if (!origin) return false;
+  const cleanOrigin = origin.trim().replace(/\/+$/, '');
+  if (ALLOWED_EXACT_ORIGINS.has(cleanOrigin)) {
+    return true;
+  }
+  return VERCEL_PREVIEW_PATTERN.test(cleanOrigin);
+}
+
+function handleCors(req: VercelRequest, res: VercelResponse): boolean {
+  const origin = (req.headers.origin as string) || '';
+
+  if (origin) {
+    if (isAllowedOrigin(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-Requested-With, Accept, apikey, x-bootstrap-secret'
+      );
+      res.setHeader('Access-Control-Max-Age', '86400');
+      res.setHeader('Vary', 'Origin');
+    } else {
+      if (req.method === 'OPTIONS') {
+        res.status(403).json({ error: 'Origin not allowed by CORS policy' });
+        return true;
+      }
+    }
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return true;
+  }
+
+  return false;
+}
 
 function getClientIp(req: VercelRequest): string {
   const xRealIp = req.headers['x-real-ip'];
@@ -49,13 +117,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid company code, mobile number, or PIN.' });
     }
 
+    const { supabaseUrl, serviceRoleKey, anonKey } = getSupabaseServerEnv();
+
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error('[auth/login] Server configuration error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing.');
+      console.error(
+        `[auth/login] Missing server configuration: url=${Boolean(supabaseUrl)}, serviceRole=${Boolean(
+          serviceRoleKey
+        )}`
+      );
       return res.status(500).json({ error: 'Authentication service temporarily unavailable.' });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     // 2. Dual-Dimension Rate Limiting: Dimension 2 (Client IP Throttling)
