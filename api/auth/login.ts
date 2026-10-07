@@ -2,10 +2,30 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-// Initialize Supabase Admin client using server-only credentials
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const anonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+// Safe dynamic environment resolution for Supabase credentials across all Vercel environments
+function getSupabaseServerEnv() {
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    '';
+
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_KEY ||
+    '';
+
+  const anonKey =
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
+
+  return { supabaseUrl, serviceRoleKey, anonKey };
+}
 
 const ALLOWED_EXACT_ORIGINS = new Set([
   'https://localhost',
@@ -97,13 +117,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid company code, mobile number, or PIN.' });
     }
 
+    const { supabaseUrl, serviceRoleKey, anonKey } = getSupabaseServerEnv();
+
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error('[auth/login] Server configuration error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing.');
-      return res.status(500).json({ error: 'Authentication service temporarily unavailable.' });
+      console.error(
+        `[auth/login] Missing server configuration: url=${Boolean(supabaseUrl)}, serviceRole=${Boolean(
+          serviceRoleKey
+        )}`
+      );
+      return res.status(500).json({
+        error: 'Authentication service temporarily unavailable.',
+        diag: {
+          hasUrl: Boolean(supabaseUrl),
+          hasServiceRole: Boolean(serviceRoleKey),
+          hasAnon: Boolean(anonKey),
+        },
+      });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     // 2. Dual-Dimension Rate Limiting: Dimension 2 (Client IP Throttling)
@@ -133,7 +166,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (error) {
       console.error('[auth/login] RPC error:', error.message);
-      return res.status(500).json({ error: 'Authentication service temporarily unavailable.' });
+      return res.status(500).json({
+        error: 'Authentication service temporarily unavailable.',
+        diag: { rpcError: error.message },
+      });
     }
 
     const authResult = Array.isArray(data) ? data[0] : data;
