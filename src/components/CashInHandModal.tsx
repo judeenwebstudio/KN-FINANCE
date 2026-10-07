@@ -46,10 +46,6 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  if (!isOpen) return null;
-
-  const currentCashInHand = getCashInHand();
-
   // Scoped Agent Commission records (Reporting Only)
   const scopedCommissionRecords = useMemo(() => {
     let filtered = borrowers;
@@ -73,6 +69,11 @@ export const CashInHandModal: React.FC<CashInHandModalProps> = ({ isOpen, onClos
   const totalAgentCommission = useMemo(() => {
     return scopedCommissionRecords.reduce((sum, b) => sum + (b.agentCommission || 0), 0);
   }, [scopedCommissionRecords]);
+
+  // Conditional early return ONLY after ALL hooks have executed unconditionally
+  if (!isOpen) return null;
+
+  const currentCashInHand = getCashInHand();
 
   // Aggregate numbers (authoritative from companyCashSummary when available, fallback to ledger)
   const totalAdded = companyCashSummary?.totalAdded ?? cashLedger.filter(e => e.transactionType === 'CASH_ADDED').reduce((s, e) => s + e.amount, 0);
