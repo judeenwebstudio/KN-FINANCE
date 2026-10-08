@@ -158,6 +158,38 @@ export function formatCollectionSchedule(borrower: Partial<Borrower>): string {
 }
 
 /**
+ * Calculates the default suggested Due Start Date based on Payment Date, Finance Type, and Collection Day.
+ * For Weekly: The next occurrence of weeklyCollectionDay strictly AFTER paymentDateIso.
+ * For Daily & Monthly: Defaults to paymentDateIso.
+ */
+export function calculateSuggestedDueStartDate(
+  paymentDateIso: string,
+  financeType: Timeframe,
+  weeklyCollectionDay?: number | null
+): string {
+  if (!paymentDateIso) return getTodayIsoDate();
+  const payDate = parseCustomDate(paymentDateIso);
+  if (!payDate) return paymentDateIso;
+
+  if (financeType === 'Weekly') {
+    const jsDay = payDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const currentDay1to7 = jsDay === 0 ? 7 : jsDay;
+    const targetDay = weeklyCollectionDay && weeklyCollectionDay >= 1 && weeklyCollectionDay <= 7
+      ? weeklyCollectionDay
+      : currentDay1to7;
+    let daysToAdd = (targetDay - currentDay1to7 + 7) % 7;
+    if (daysToAdd === 0) {
+      daysToAdd = 7; // Strictly AFTER Payment Date
+    }
+    const suggested = new Date(payDate.getFullYear(), payDate.getMonth(), payDate.getDate() + daysToAdd);
+    return toIsoDate(suggested);
+  }
+
+  // Daily and Monthly: defaults to paymentDateIso
+  return paymentDateIso;
+}
+
+/**
  * Generates all scheduled installments for a borrower from startDate to duration,
  * according to the Finance Type and explicit collection schedule.
  */
@@ -190,7 +222,11 @@ export function getBorrowerSchedule(borrower: Borrower): ScheduledInstallment[] 
       const currentDay1to7 = jsDay === 0 ? 7 : jsDay;
       let daysToAdd = (borrower.weeklyCollectionDay - currentDay1to7 + 7) % 7;
       if (daysToAdd === 0) {
-        daysToAdd = 7; // NO installment on Start Date; full 7-day cycle
+        if (borrower.paymentDate && toIsoDate(parseCustomDate(borrower.paymentDate) || new Date()) !== toIsoDate(startDate)) {
+          daysToAdd = 0;
+        } else {
+          daysToAdd = 7; // NO installment on Start Date; full 7-day cycle for historical records
+        }
       }
       firstDueDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + daysToAdd);
     } else {
@@ -251,11 +287,13 @@ export function calculateBorrowerEndDate(
   financeType: Timeframe,
   durationStr: string,
   weeklyCollectionDay?: number | null,
-  monthlyCollectionDay?: number | null
+  monthlyCollectionDay?: number | null,
+  paymentDateIso?: string | null
 ): string {
   if (!startDateIso || !durationStr) return '';
   const mockBorrower = {
     startDate: startDateIso,
+    paymentDate: paymentDateIso,
     financeType,
     repaymentDuration: durationStr,
     weeklyCollectionDay,

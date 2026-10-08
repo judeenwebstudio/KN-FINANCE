@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { validateBorrowerDocumentFile, uploadBorrowerDocument, formatFileSize } from '../utils/documentStorage';
 import {
   calculateBorrowerEndDate,
+  calculateSuggestedDueStartDate,
   parseCustomDate,
   calculateAgentCommission,
   calculateDeductedAmount,
@@ -87,6 +88,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
   const [paymentDateIso, setPaymentDateIso] = useState(getTodayIsoDate());
   const [startDateIso, setStartDateIso] = useState(getTodayIsoDate());
+  const [isStartDateManuallyEdited, setIsStartDateManuallyEdited] = useState(false);
   const [isExistingLoan, setIsExistingLoan] = useState(false);
 
   // Documents state (Optional multi-document upload)
@@ -211,7 +213,9 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
         setPaymentDateIso(todayIso);
-        setStartDateIso(todayIso);
+        const suggestedStart = calculateSuggestedDueStartDate(todayIso, initialType, todayDay1to7);
+        setStartDateIso(suggestedStart);
+        setIsStartDateManuallyEdited(false);
         const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
           ? currentUser.companyUserId
           : '';
@@ -238,12 +242,9 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     if (!options.includes(repaymentDuration)) {
       setRepaymentDuration(options[1] || options[0]);
     }
-    if (newType === 'Weekly' && !initialBorrower) {
-      const parsed = parseCustomDate(startDateIso);
-      if (parsed) {
-        const jsDay = parsed.getDay();
-        setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
-      }
+    if (!initialBorrower && !isStartDateManuallyEdited) {
+      const suggested = calculateSuggestedDueStartDate(paymentDateIso, newType, weeklyCollectionDay);
+      setStartDateIso(suggested);
     }
 
     if (newType === 'Daily' || newType === 'Weekly') {
@@ -272,6 +273,27 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     });
   };
 
+  const handlePaymentDateChange = (newPaymentIso: string) => {
+    setPaymentDateIso(newPaymentIso);
+    if (!initialBorrower && !isStartDateManuallyEdited) {
+      const suggested = calculateSuggestedDueStartDate(newPaymentIso, financeType, weeklyCollectionDay);
+      setStartDateIso(suggested);
+    }
+  };
+
+  const handleWeeklyCollectionDayChange = (newDay: number) => {
+    setWeeklyCollectionDay(newDay);
+    if (!initialBorrower && !isStartDateManuallyEdited) {
+      const suggested = calculateSuggestedDueStartDate(paymentDateIso, 'Weekly', newDay);
+      setStartDateIso(suggested);
+    }
+  };
+
+  const handleStartDateChange = (newStartIso: string) => {
+    setStartDateIso(newStartIso);
+    setIsStartDateManuallyEdited(true);
+  };
+
   const handleAgentChange = (newAgentId: string) => {
     setSelectedAgentId(newAgentId);
   };
@@ -297,9 +319,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       financeType,
       repaymentDuration,
       financeType === 'Weekly' ? weeklyCollectionDay : null,
-      financeType === 'Monthly' ? monthlyCollectionDay : null
+      financeType === 'Monthly' ? monthlyCollectionDay : null,
+      paymentDateIso
     );
-  }, [startDateIso, financeType, repaymentDuration, weeklyCollectionDay, monthlyCollectionDay]);
+  }, [startDateIso, financeType, repaymentDuration, weeklyCollectionDay, monthlyCollectionDay, paymentDateIso]);
 
   // Formatted start date for display
   const formattedStartDate = useMemo(() => {
@@ -1016,7 +1039,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                   </label>
                   <select
                     value={weeklyCollectionDay}
-                    onChange={(e) => setWeeklyCollectionDay(parseInt(e.target.value, 10))}
+                    onChange={(e) => handleWeeklyCollectionDayChange(parseInt(e.target.value, 10))}
                     className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                   >
                     <option value={1}>Monday</option>
@@ -1064,7 +1087,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <input
                   type="date"
                   value={paymentDateIso}
-                  onChange={(e) => setPaymentDateIso(e.target.value)}
+                  onChange={(e) => handlePaymentDateChange(e.target.value)}
                   className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                 />
                 <p className="text-[11px] text-[#64748b] mt-1 font-medium">
@@ -1083,18 +1106,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <input
                   type="date"
                   value={startDateIso}
-                  onChange={(e) => {
-                    const newIso = e.target.value;
-                    setStartDateIso(newIso);
-                    if (!initialBorrower && newIso) {
-                      const parsed = parseCustomDate(newIso);
-                      if (parsed) {
-                        const jsDay = parsed.getDay();
-                        setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
-                        setMonthlyCollectionDay(parsed.getDate());
-                      }
-                    }
-                  }}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
                   className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                 />
                 <p className="text-[11px] text-[#64748b] mt-1 font-medium">
