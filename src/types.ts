@@ -270,4 +270,15 @@ export interface KNFinanceBackup extends BackupMetadata {
   data: KNFinanceBackupData;
 }
 
+export interface DueBorrowerItem {
+  borrower: Borrower;
+  dueAmount: number;
+  paidAmount: number;
+  pendingAmount: number;
+  todayDue: number;
+  overdueAmount: number;
+  status: 'Pending' | 'Partial';
+}
+
+
 

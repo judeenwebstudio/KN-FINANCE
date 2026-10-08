@@ -1,4 +1,4 @@
-import type { Borrower, PaymentRecord, Timeframe } from '../types';
+import type { Borrower, PaymentRecord, Timeframe, DueBorrowerItem } from '../types';
 
 // ==========================================
 // DATE UTILITIES (Local Date Safe)
@@ -552,6 +552,72 @@ export function getCurrentActionableDue(
     overdueCount: overdueInsts.length,
     overdueAmount: overdueInsts.reduce((sum, inst) => sum + inst.pendingAmount, 0),
   };
+}
+
+/**
+ * Evaluates active borrowers with unpaid dues on or before targetDateIso (today's due + overdue).
+ * Uses canonical FIFO waterfall payment allocation (getAllocatedSchedule) filtered up to targetDateIso.
+ * Excludes borrowers whose installments through targetDateIso are fully covered.
+ * Avoids duplicate entries by evaluating each active borrower exactly once.
+ */
+export function calculateDueBorrowersForDate(
+  borrowers: Borrower[],
+  allPayments: PaymentRecord[],
+  targetDateIso: string = getTodayIsoDate(),
+  timeframe?: Timeframe
+): DueBorrowerItem[] {
+  const dueItems: DueBorrowerItem[] = [];
+
+  // Filter payments strictly on or before targetDateIso to guarantee historical accuracy without future leakage
+  const paymentsUpToDate = allPayments.filter((p) => !p.paymentDate || p.paymentDate <= targetDateIso);
+
+  // Filter active borrowers matching timeframe filter (if provided)
+  const relevantBorrowers = borrowers.filter(
+    (b) => b.status === 'active' && (!timeframe || (b.financeType || 'Daily') === timeframe)
+  );
+
+  for (const borrower of relevantBorrowers) {
+    const allocated = getAllocatedSchedule(borrower, paymentsUpToDate, targetDateIso);
+
+    // Installments scheduled on or before targetDateIso
+    const installmentsThroughDate = allocated.filter((inst) => inst.dueDateIso <= targetDateIso);
+
+    if (installmentsThroughDate.length === 0) {
+      continue;
+    }
+
+    const overdueInsts = installmentsThroughDate.filter((inst) => inst.dueDateIso < targetDateIso);
+    const todayInsts = installmentsThroughDate.filter((inst) => inst.dueDateIso === targetDateIso);
+
+    const overdueScheduled = overdueInsts.reduce((sum, inst) => sum + inst.scheduledAmount, 0);
+    const overduePaid = overdueInsts.reduce((sum, inst) => sum + inst.paidAmount, 0);
+    const overdueAmount = overdueInsts.reduce((sum, inst) => sum + inst.pendingAmount, 0);
+
+    const todayScheduled = todayInsts.reduce((sum, inst) => sum + inst.scheduledAmount, 0);
+    const todayPaid = todayInsts.reduce((sum, inst) => sum + inst.paidAmount, 0);
+    const todayDue = todayInsts.reduce((sum, inst) => sum + inst.pendingAmount, 0);
+
+    const totalScheduledDue = overdueScheduled + todayScheduled;
+    const totalPaidThroughDate = overduePaid + todayPaid;
+    const totalPending = overdueAmount + todayDue;
+
+    // If fully covered through target date, exclude
+    if (totalPending <= 0) {
+      continue;
+    }
+
+    dueItems.push({
+      borrower,
+      dueAmount: totalScheduledDue,
+      paidAmount: totalPaidThroughDate,
+      pendingAmount: totalPending,
+      todayDue,
+      overdueAmount,
+      status: totalPaidThroughDate > 0 ? 'Partial' : 'Pending',
+    });
+  }
+
+  return dueItems;
 }
 
 // ==========================================

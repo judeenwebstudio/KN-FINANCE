@@ -16,6 +16,7 @@ import type {
   CashLedgerEntry,
   CompanyCollectionLine,
   CollectionMethod,
+  DueBorrowerItem,
 } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
@@ -23,6 +24,7 @@ import {
   calculateAgentCommission,
   calculateDeductedAmount,
   calculateNetAmountGiven,
+  calculateDueBorrowersForDate,
 } from '../utils/loanCalculations';
 import {
   loginWithPin,
@@ -32,7 +34,7 @@ import {
   setCloudAgentStatus,
 } from '../lib/authService';
 
-export type { NewBorrowerInput };
+export type { NewBorrowerInput, DueBorrowerItem };
 
 export interface CompanyCashSummary {
   cashInHand: number;
@@ -42,14 +44,6 @@ export interface CompanyCashSummary {
   totalDisbursed: number;
   totalCollected: number;
   totalDeducted: number;
-}
-
-export interface DueBorrowerItem {
-  borrower: Borrower;
-  dueAmount: number;
-  paidAmount: number;
-  pendingAmount: number;
-  status: 'Pending' | 'Partial';
 }
 
 interface AppContextType {
@@ -1822,10 +1816,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getDueBorrowersForDate = (targetDateIso: string, tf?: Timeframe): DueBorrowerItem[] => {
-    const [y, m, d] = targetDateIso.split('-');
-    const targetDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
-
-    // Role-scoped borrowers for due calculation
+    // Role-scoped borrowers for due calculation (Manager sees all company borrowers, Agent sees assigned only)
     const roleScopedList = currentRole === 'agent'
       ? borrowers.filter(
           (b) =>
@@ -1836,38 +1827,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         )
       : borrowers;
 
-    const relevantBorrowers = roleScopedList.filter(
-      (b) => (!tf || (b.financeType || 'Daily') === tf) && b.status === 'active'
-    );
-
-    const dueItems: DueBorrowerItem[] = [];
-
-    for (const b of relevantBorrowers) {
-      const { isDue, scheduledAmount } = isPaymentDueOnDate(b, targetDate);
-      if (!isDue || scheduledAmount <= 0) continue;
-
-      // Check payments recorded on this target date
-      const paidForDate = payments
-        .filter((p) => p.borrowerId === b.id && p.paymentDate === targetDateIso)
-        .reduce((sum, p) => sum + p.amount, 0);
-
-      const pending = Math.max(0, scheduledAmount - paidForDate);
-
-      // If fully paid, the borrower is not counted as unpaid due for that date
-      if (paidForDate >= scheduledAmount) {
-        continue;
-      }
-
-      dueItems.push({
-        borrower: b,
-        dueAmount: scheduledAmount,
-        paidAmount: paidForDate,
-        pendingAmount: pending,
-        status: paidForDate > 0 ? 'Partial' : 'Pending',
-      });
-    }
-
-    return dueItems;
+    return calculateDueBorrowersForDate(roleScopedList, payments, targetDateIso, tf);
   };
 
   const getTodayDueCount = (tf?: Timeframe): number => {

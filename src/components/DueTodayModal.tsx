@@ -277,8 +277,23 @@ export const DueTodayModal: React.FC<DueTodayModalProps> = ({ isOpen, onClose })
                       <td className="py-3.5 px-4 sm:px-5 text-[#334155] font-medium">
                         ₹{item.paidAmount.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4 sm:px-5 font-bold text-[#4f46e5]">
-                        ₹{item.pendingAmount.toLocaleString('en-IN')}
+                      <td className="py-3.5 px-4 sm:px-5">
+                        <div className="font-bold text-[#4f46e5]">
+                          ₹{item.pendingAmount.toLocaleString('en-IN')}
+                        </div>
+                        {item.overdueAmount > 0 && item.todayDue > 0 ? (
+                          <div className="text-[11px] text-slate-500 font-normal mt-0.5 whitespace-nowrap">
+                            Today: ₹{item.todayDue.toLocaleString('en-IN')} • <span className="text-rose-600 font-medium">Overdue: ₹{item.overdueAmount.toLocaleString('en-IN')}</span>
+                          </div>
+                        ) : item.overdueAmount > 0 ? (
+                          <div className="text-[11px] text-rose-600 font-medium mt-0.5 whitespace-nowrap">
+                            Overdue: ₹{item.overdueAmount.toLocaleString('en-IN')}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-500 font-normal mt-0.5 whitespace-nowrap">
+                            Today: ₹{item.todayDue.toLocaleString('en-IN')}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 sm:px-5">
                         <span
