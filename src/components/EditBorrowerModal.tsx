@@ -6,6 +6,7 @@ import {
   parseCustomDate,
   calculateNetAmountGiven,
   toIsoDate,
+  calculateSuggestedDueStartDate,
 } from '../utils/loanCalculations';
 import { COLLECTION_METHODS } from '../types';
 import type { Timeframe, Borrower, NewBorrowerInput, CollectionMethod } from '../types';
@@ -96,6 +97,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
   const [paymentDateIso, setPaymentDateIso] = useState<string>('');
   const [startDateIso, setStartDateIso] = useState<string>(getTodayIsoDate());
+  const [isStartDateManuallyEdited, setIsStartDateManuallyEdited] = useState(false);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -227,7 +229,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
         setPaymentDateIso('');
       }
 
-      // Due Start Date
+      // Due Start Date: strictly preserve existing borrower start date on open
       if (borrower.startDate) {
         const parsedS = parseCustomDate(borrower.startDate);
         setStartDateIso(parsedS ? toIsoDate(parsedS) : getTodayIsoDate());
@@ -235,6 +237,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
         setStartDateIso(getTodayIsoDate());
       }
 
+      setIsStartDateManuallyEdited(false);
       setErrors({});
       setSubmitError(null);
       setIsConfirmOpen(false);
@@ -249,21 +252,44 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     if (!options.includes(repaymentDuration)) {
       setRepaymentDuration(options[1] || options[0]);
     }
-    if (newType === 'Weekly') {
-      const parsed = parseCustomDate(startDateIso);
-      if (parsed) {
-        const jsDay = parsed.getDay();
-        setWeeklyCollectionDay(jsDay === 0 ? 7 : jsDay);
-      }
-    }
+
+    const todayIso = getTodayIsoDate();
+    const suggested = calculateSuggestedDueStartDate(
+      todayIso,
+      newType,
+      weeklyCollectionDay,
+      monthlyCollectionDay
+    );
+    setStartDateIso(suggested);
+    setIsStartDateManuallyEdited(false);
   };
 
   const handleWeeklyCollectionDayChange = (newDay: number) => {
     setWeeklyCollectionDay(newDay);
+    if (!isStartDateManuallyEdited) {
+      const todayIso = getTodayIsoDate();
+      const suggested = calculateSuggestedDueStartDate(
+        todayIso,
+        'Weekly',
+        newDay,
+        monthlyCollectionDay
+      );
+      setStartDateIso(suggested);
+    }
   };
 
   const handleMonthlyCollectionDayChange = (newDay: number) => {
     setMonthlyCollectionDay(newDay);
+    if (!isStartDateManuallyEdited) {
+      const todayIso = getTodayIsoDate();
+      const suggested = calculateSuggestedDueStartDate(
+        todayIso,
+        'Monthly',
+        weeklyCollectionDay,
+        newDay
+      );
+      setStartDateIso(suggested);
+    }
   };
 
   const handlePaymentDateChange = (newPaymentIso: string) => {
@@ -273,6 +299,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
 
   const handleStartDateChange = (newStartIso: string) => {
     setStartDateIso(newStartIso);
+    setIsStartDateManuallyEdited(true);
   };
 
   const handleAgentChange = (newAgentId: string) => {
