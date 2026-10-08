@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, ChevronDown, Image as ImageIcon, Printer, X } from 'lucide-react';
 import { useApp, getTodayIsoDate } from '../context/AppContext';
 import { resolveCollectorName } from '../utils/agentUtils';
@@ -12,6 +12,7 @@ interface CollectionsModalProps {
 export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onClose }) => {
   const { payments, company, manager, agents, settings } = useApp();
   const [selectedDateIso, setSelectedDateIso] = useState<string>(getTodayIsoDate());
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   // Default to today whenever modal opens
   useEffect(() => {
@@ -19,6 +20,20 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
       setSelectedDateIso(getTodayIsoDate());
     }
   }, [isOpen]);
+
+  const handleOpenDatePicker = () => {
+    if (dateInputRef.current) {
+      if (typeof dateInputRef.current.showPicker === 'function') {
+        try {
+          dateInputRef.current.showPicker();
+        } catch {
+          dateInputRef.current.focus();
+        }
+      } else {
+        dateInputRef.current.focus();
+      }
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -153,17 +168,25 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({ isOpen, onCl
 
             {/* Date Selector: [calendar icon] 23 Sept 2026 ▼ */}
             <div className="relative inline-block mt-2 no-print">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs sm:text-sm font-semibold text-[#1e293b] cursor-pointer transition-colors shadow-sm">
-                <Calendar size={15} className="text-[#4f46e5]" />
+              <button
+                type="button"
+                onClick={handleOpenDatePicker}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs sm:text-sm font-semibold text-[#1e293b] cursor-pointer transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20"
+                title="Select Date"
+                aria-label="Select Date"
+              >
+                <Calendar size={15} className="text-[#4f46e5] shrink-0" />
                 <span>{formattedDisplay}</span>
-                <ChevronDown size={14} className="text-[#64748b]" />
-              </div>
+                <ChevronDown size={14} className="text-[#64748b] shrink-0" />
+              </button>
               <input
+                ref={dateInputRef}
                 type="date"
                 value={selectedDateIso}
                 onChange={(e) => e.target.value && setSelectedDateIso(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                title="Select Date"
+                className="absolute inset-0 opacity-0 pointer-events-none w-full h-full"
+                tabIndex={-1}
+                aria-hidden="true"
               />
             </div>
 
