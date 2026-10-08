@@ -1462,22 +1462,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const targetBorrower = borrowers.find((b) => b.id === id);
+        const partialErrors: string[] = [];
 
-        // Dedicated minimal Payment Date update if provided
+        // 1. Dedicated minimal Payment Date update if provided and changed
         if (data.paymentDate !== undefined && data.paymentDate !== null && data.paymentDate !== '') {
           const paymentIso = toDbDate(data.paymentDate);
-          if (paymentIso) {
+          const currentPaymentIso = targetBorrower?.paymentDate ? toDbDate(targetBorrower.paymentDate) : null;
+          if (paymentIso && paymentIso !== currentPaymentIso) {
             const { error: pDateErr } = await (supabase as any).rpc('update_borrower_payment_date', {
               p_borrower_id: id,
               p_payment_date: paymentIso,
             });
             if (pDateErr) {
-              console.warn('update_borrower_payment_date RPC warning:', pDateErr.message);
+              console.error('update_borrower_payment_date RPC error:', pDateErr);
+              partialErrors.push(`Payment Date update failed: ${pDateErr.message}`);
             }
           }
         }
 
-        // Dedicated minimal Parcel Token Mode update only when the value actually changes
+        // 2. Dedicated minimal Parcel Token Mode update only when the value actually changes
         if (data.parcelTokenMode !== undefined && data.parcelTokenMode !== null) {
           const newParcelTokenMode = Boolean(data.parcelTokenMode);
           const currentParcelTokenMode = Boolean(targetBorrower?.parcelTokenMode);
@@ -1488,13 +1491,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             if (tokenModeErr) {
               console.error('update_borrower_parcel_token_mode RPC error:', tokenModeErr);
-              await fetchCloudData();
-              return { success: false, error: tokenModeErr.message || 'Failed to update parcel token mode.' };
+              partialErrors.push(`Parcel Token Mode update failed: ${tokenModeErr.message}`);
             }
           }
         }
 
         await fetchCloudData();
+
+        if (partialErrors.length > 0) {
+          return {
+            success: false,
+            error: `Borrower details saved, but secondary updates failed: ${partialErrors.join('; ')}. Data has been refreshed.`,
+          };
+        }
+
         return { success: true };
       } catch (err: any) {
         console.error('updateBorrower exception:', err);
