@@ -687,7 +687,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               Loan Configuration
             </h3>
 
-            {/* Finance Type, Dynamic Schedule, Assign to Agent, Line, Collection Method, Parcel Token Mode */}
+            {/* Finance Type, Repayment Duration, Assign to Agent, Line, Collection Method, Parcel Token Mode */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
               {/* Finance Type */}
               <div>
@@ -705,53 +705,26 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 </select>
               </div>
 
-              {/* Dynamic Collection Day (Weekly) */}
-              {financeType === 'Weekly' && (
-                <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                    Collection Day <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={weeklyCollectionDay}
-                    onChange={(e) => setWeeklyCollectionDay(parseInt(e.target.value, 10))}
-                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
-                  >
-                    <option value={1}>Monday</option>
-                    <option value={2}>Tuesday</option>
-                    <option value={3}>Wednesday</option>
-                    <option value={4}>Thursday</option>
-                    <option value={5}>Friday</option>
-                    <option value={6}>Saturday</option>
-                    <option value={7}>Sunday</option>
-                  </select>
-                  {errors.weeklyCollectionDay && (
-                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.weeklyCollectionDay}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Dynamic Collection Date (Monthly) */}
-              {financeType === 'Monthly' && (
-                <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                    Collection Date <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={monthlyCollectionDay}
-                    onChange={(e) => setMonthlyCollectionDay(parseInt(e.target.value, 10))}
-                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
-                  >
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.monthlyCollectionDay && (
-                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.monthlyCollectionDay}</p>
-                  )}
-                </div>
-              )}
+              {/* Repayment Duration */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Repayment Duration <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={repaymentDuration}
+                  onChange={(e) => setRepaymentDuration(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer font-medium"
+                >
+                  {DURATION_OPTIONS[financeType].map((dur) => (
+                    <option key={dur} value={dur}>
+                      {dur}
+                    </option>
+                  ))}
+                </select>
+                {errors.repaymentDuration && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.repaymentDuration}</p>
+                )}
+              </div>
 
               {/* Assign to Agent */}
               <div>
@@ -1004,8 +977,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               </div>
             </div>
 
-            {/* Interest Rate, Repayment Duration, Start Date, End Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Interest Rate, Dynamic Collection Day/Date, Start Date, End Date */}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${financeType === 'Daily' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
               {/* Interest Rate (AUTO-CALCULATED) */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
@@ -1018,26 +991,53 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 </div>
               </div>
 
-              {/* Repayment Duration */}
-              <div>
-                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                  Repayment Duration <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={repaymentDuration}
-                  onChange={(e) => setRepaymentDuration(e.target.value)}
-                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer font-medium"
-                >
-                  {DURATION_OPTIONS[financeType].map((dur) => (
-                    <option key={dur} value={dur}>
-                      {dur}
-                    </option>
-                  ))}
-                </select>
-                {errors.repaymentDuration && (
-                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.repaymentDuration}</p>
-                )}
-              </div>
+              {/* Dynamic Collection Day (Weekly) */}
+              {financeType === 'Weekly' && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Collection Day <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={weeklyCollectionDay}
+                    onChange={(e) => setWeeklyCollectionDay(parseInt(e.target.value, 10))}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                  >
+                    <option value={1}>Monday</option>
+                    <option value={2}>Tuesday</option>
+                    <option value={3}>Wednesday</option>
+                    <option value={4}>Thursday</option>
+                    <option value={5}>Friday</option>
+                    <option value={6}>Saturday</option>
+                    <option value={7}>Sunday</option>
+                  </select>
+                  {errors.weeklyCollectionDay && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.weeklyCollectionDay}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Dynamic Collection Date (Monthly) */}
+              {financeType === 'Monthly' && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Collection Date <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={monthlyCollectionDay}
+                    onChange={(e) => setMonthlyCollectionDay(parseInt(e.target.value, 10))}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.monthlyCollectionDay && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.monthlyCollectionDay}</p>
+                  )}
+                </div>
+              )}
 
               {/* Start Date */}
               <div>
