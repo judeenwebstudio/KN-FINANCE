@@ -159,8 +159,9 @@ export function formatCollectionSchedule(borrower: Partial<Borrower>): string {
 
 /**
  * Calculates the suggested Due Start Date based on the reference date (today), Finance Type, and Collection Day/Date.
- * - For Weekly: The next occurrence of the selected Collection Day strictly after the reference date.
- * - For Monthly: The next occurrence of the selected Collection Date strictly after the reference date (with month-end clamping).
+ * - For Weekly: First Due Start Date must be at least 7 calendar days after today's local date,
+ *   then select the first matching Collection Day on or after that minimum date.
+ * - For Monthly: First Due Start Date must always fall in the next calendar month, on the selected Collection Date (with month-end clamping & year rollover).
  * - For Daily: Defaults to the reference date.
  */
 export function calculateSuggestedDueStartDate(
@@ -174,16 +175,15 @@ export function calculateSuggestedDueStartDate(
   if (!refDate) return refDateIso;
 
   if (financeType === 'Weekly') {
-    const jsDay = refDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    const currentDay1to7 = jsDay === 0 ? 7 : jsDay;
+    // Minimum date is strictly at least 7 calendar days after reference date
+    const minDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + 7);
+    const minJsDay = minDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const minDay1to7 = minJsDay === 0 ? 7 : minJsDay;
     const targetDay = weeklyCollectionDay && weeklyCollectionDay >= 1 && weeklyCollectionDay <= 7
       ? weeklyCollectionDay
-      : currentDay1to7;
-    let daysToAdd = (targetDay - currentDay1to7 + 7) % 7;
-    if (daysToAdd === 0) {
-      daysToAdd = 7; // Next occurrence strictly after reference date
-    }
-    const suggested = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + daysToAdd);
+      : minDay1to7;
+    const daysToAdd = (targetDay - minDay1to7 + 7) % 7;
+    const suggested = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate() + daysToAdd);
     return toIsoDate(suggested);
   }
 
@@ -192,12 +192,8 @@ export function calculateSuggestedDueStartDate(
       ? monthlyCollectionDay
       : refDate.getDate();
 
-    let targetYear = refDate.getFullYear();
-    let targetMonthIndex = refDate.getMonth();
-    // Strictly after reference date: if reference day is on or after targetDay, advance to next month
-    if (refDate.getDate() >= targetDay) {
-      targetMonthIndex += 1;
-    }
+    const targetYear = refDate.getFullYear();
+    const targetMonthIndex = refDate.getMonth() + 1; // Always in the NEXT calendar month
 
     const tempDate = new Date(targetYear, targetMonthIndex, 1);
     const validYear = tempDate.getFullYear();
