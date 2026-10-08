@@ -1475,6 +1475,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
+        // Dedicated minimal Parcel Token Mode update if provided
+        if (data.parcelTokenMode !== undefined && data.parcelTokenMode !== null) {
+          const { error: tokenModeErr } = await (supabase as any).rpc('update_borrower_parcel_token_mode', {
+            p_borrower_id: id,
+            p_parcel_token_mode: Boolean(data.parcelTokenMode),
+          });
+          if (tokenModeErr) {
+            console.warn('update_borrower_parcel_token_mode RPC warning:', tokenModeErr.message);
+          }
+        }
+
         await fetchCloudData();
         return { success: true };
       } catch (err: any) {

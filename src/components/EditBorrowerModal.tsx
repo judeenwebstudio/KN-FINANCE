@@ -96,7 +96,6 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
   const [paymentDateIso, setPaymentDateIso] = useState<string>('');
   const [startDateIso, setStartDateIso] = useState<string>(getTodayIsoDate());
-  const [isExistingLoan, setIsExistingLoan] = useState(false);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -236,7 +235,6 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
         setStartDateIso(getTodayIsoDate());
       }
 
-      setIsExistingLoan(Boolean(borrower.isExistingLoan));
       setErrors({});
       setSubmitError(null);
       setIsConfirmOpen(false);
@@ -469,7 +467,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
       paymentDate: paymentDateIso ? formattedPaymentDate : undefined,
       startDate: formattedStartDate,
       endDate: calculatedEndDate || undefined,
-      isExistingLoan,
+      isExistingLoan: borrower.isExistingLoan,
     };
 
     const res = await updateBorrower(borrower.id, payload);
@@ -1015,23 +1013,6 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
                     Inclusive count ({repaymentDuration})
                   </p>
                 </div>
-              </div>
-
-              {/* Existing Loan Checkbox */}
-              <div className="flex items-center pt-2">
-                <input
-                  id="edit-existing-loan-checkbox"
-                  type="checkbox"
-                  checked={isExistingLoan}
-                  onChange={(e) => setIsExistingLoan(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#4f46e5] border-slate-300 focus:ring-[#4f46e5] accent-[#4f46e5] cursor-pointer"
-                />
-                <label
-                  htmlFor="edit-existing-loan-checkbox"
-                  className="ml-2.5 text-xs sm:text-sm font-medium text-[#475569] cursor-pointer select-none"
-                >
-                  This is an existing loan (manage past payments after saving)
-                </label>
               </div>
             </div>
 
