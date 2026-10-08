@@ -1078,7 +1078,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               {/* Start Date */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                  Start Date <span className="text-red-500">*</span>
+                  Due Start Date <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -1108,7 +1108,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               {/* End Date (AUTO-CALCULATED) */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
-                  End Date
+                  Due End Date
                 </label>
                 <div className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold flex items-center select-none">
                   {calculatedEndDate || <span className="text-slate-400 font-normal">Auto-calculated</span>}
