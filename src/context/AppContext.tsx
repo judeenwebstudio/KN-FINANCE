@@ -1461,6 +1461,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return { success: false, error: res.error || 'Failed to update borrower.' };
         }
 
+        const targetBorrower = borrowers.find((b) => b.id === id);
+
         // Dedicated minimal Payment Date update if provided
         if (data.paymentDate !== undefined && data.paymentDate !== null && data.paymentDate !== '') {
           const paymentIso = toDbDate(data.paymentDate);
@@ -1475,14 +1477,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        // Dedicated minimal Parcel Token Mode update if provided
+        // Dedicated minimal Parcel Token Mode update only when the value actually changes
         if (data.parcelTokenMode !== undefined && data.parcelTokenMode !== null) {
-          const { error: tokenModeErr } = await (supabase as any).rpc('update_borrower_parcel_token_mode', {
-            p_borrower_id: id,
-            p_parcel_token_mode: Boolean(data.parcelTokenMode),
-          });
-          if (tokenModeErr) {
-            console.warn('update_borrower_parcel_token_mode RPC warning:', tokenModeErr.message);
+          const newParcelTokenMode = Boolean(data.parcelTokenMode);
+          const currentParcelTokenMode = Boolean(targetBorrower?.parcelTokenMode);
+          if (newParcelTokenMode !== currentParcelTokenMode) {
+            const { error: tokenModeErr } = await (supabase as any).rpc('update_borrower_parcel_token_mode', {
+              p_borrower_id: id,
+              p_parcel_token_mode: newParcelTokenMode,
+            });
+            if (tokenModeErr) {
+              console.error('update_borrower_parcel_token_mode RPC error:', tokenModeErr);
+              await fetchCloudData();
+              return { success: false, error: tokenModeErr.message || 'Failed to update parcel token mode.' };
+            }
           }
         }
 
