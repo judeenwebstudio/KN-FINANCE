@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { X, AlertCircle, AlertTriangle, Loader2, Phone } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
   calculateBorrowerEndDate,
   parseCustomDate,
   calculateNetAmountGiven,
+  toIsoDate,
 } from '../utils/loanCalculations';
 import { COLLECTION_METHODS } from '../types';
 import type { Timeframe, Borrower, NewBorrowerInput, CollectionMethod } from '../types';
@@ -87,12 +88,15 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
   const [collectionLine, setCollectionLine] = useState<string>('');
   const [collectionMethod, setCollectionMethod] = useState<CollectionMethod>('Hand Cash');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [parcelTokenMode, setParcelTokenMode] = useState(false);
   const [loanAmount, setLoanAmount] = useState('');
   const [agentCommission, setAgentCommission] = useState<string>('0');
   const [deductedAmount, setDeductedAmount] = useState<string>('0');
   const [expectedReturn, setExpectedReturn] = useState('');
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
-  const [startDateIso, setStartDateIso] = useState(getTodayIsoDate());
+  const [paymentDateIso, setPaymentDateIso] = useState<string>('');
+  const [startDateIso, setStartDateIso] = useState<string>(getTodayIsoDate());
+  const [isExistingLoan, setIsExistingLoan] = useState(false);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -133,7 +137,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     return !isPresentInActive ? lineName : null;
   }, [borrower, activeLines]);
 
-  // Derived financial values: Manual Agent Commission, Manual Deducted Amount, Canonical Net Amount Given
+  // Derived financial values
   const parsedLoanAmount = useMemo(() => {
     const val = parseFloat(loanAmount);
     return isNaN(val) || val <= 0 ? 0 : val;
@@ -152,6 +156,28 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
   const calculatedNetAmountGiven = useMemo(() => {
     return calculateNetAmountGiven(parsedLoanAmount, parsedDeductedAmount, parsedAgentCommission);
   }, [parsedLoanAmount, parsedDeductedAmount, parsedAgentCommission]);
+
+  // Formatted start date for display
+  const formattedStartDate = useMemo(() => {
+    if (!startDateIso) return '';
+    const d = parseCustomDate(startDateIso);
+    if (!d) return startDateIso;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }, [startDateIso]);
+
+  // Formatted payment date for display
+  const formattedPaymentDate = useMemo(() => {
+    if (!paymentDateIso) return '';
+    const d = parseCustomDate(paymentDateIso);
+    if (!d) return paymentDateIso;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }, [paymentDateIso]);
 
   // Populate form with borrower's current values
   useEffect(() => {
@@ -179,6 +205,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
       setCollectionLine(borrower.collectionLine || activeLines[0]?.name || '');
       setCollectionMethod((borrower.collectionMethod as CollectionMethod) || 'Hand Cash');
       setSelectedAgentId(borrower.agentId || '');
+      setParcelTokenMode(Boolean(borrower.parcelTokenMode));
       setLoanAmount((borrower.loanAmount || borrower.amount || '').toString());
       setAgentCommission(
         borrower.agentCommission !== undefined && borrower.agentCommission !== null
@@ -193,20 +220,23 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
       setExpectedReturn((borrower.expectedReturn || '').toString());
       setRepaymentDuration(borrower.repaymentDuration || '50 Days');
 
+      // Payment Date: safe empty display for historical NULL
+      if (borrower.paymentDate) {
+        const parsedP = parseCustomDate(borrower.paymentDate);
+        setPaymentDateIso(parsedP ? toIsoDate(parsedP) : '');
+      } else {
+        setPaymentDateIso('');
+      }
+
+      // Due Start Date
       if (borrower.startDate) {
-        const parsed = parseCustomDate(borrower.startDate);
-        if (parsed) {
-          const yyyy = parsed.getFullYear();
-          const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-          const dd = String(parsed.getDate()).padStart(2, '0');
-          setStartDateIso(`${yyyy}-${mm}-${dd}`);
-        } else {
-          setStartDateIso(borrower.startDate);
-        }
+        const parsedS = parseCustomDate(borrower.startDate);
+        setStartDateIso(parsedS ? toIsoDate(parsedS) : getTodayIsoDate());
       } else {
         setStartDateIso(getTodayIsoDate());
       }
 
+      setIsExistingLoan(Boolean(borrower.isExistingLoan));
       setErrors({});
       setSubmitError(null);
       setIsConfirmOpen(false);
@@ -230,6 +260,23 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     }
   };
 
+  const handleWeeklyCollectionDayChange = (newDay: number) => {
+    setWeeklyCollectionDay(newDay);
+  };
+
+  const handleMonthlyCollectionDayChange = (newDay: number) => {
+    setMonthlyCollectionDay(newDay);
+  };
+
+  const handlePaymentDateChange = (newPaymentIso: string) => {
+    // Payment Date change is informational and never recalculates Due Start Date
+    setPaymentDateIso(newPaymentIso);
+  };
+
+  const handleStartDateChange = (newStartIso: string) => {
+    setStartDateIso(newStartIso);
+  };
+
   const handleAgentChange = (newAgentId: string) => {
     setSelectedAgentId(newAgentId);
   };
@@ -245,16 +292,17 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     return Number.isInteger(rate) ? `${rate}%` : `${rate.toFixed(2)}%`;
   }, [loanAmount, expectedReturn]);
 
-  // Live Computed End Date
+  // Live Computed End Date (Due End Date)
   const calculatedEndDate = useMemo(() => {
     return calculateBorrowerEndDate(
       startDateIso,
       financeType,
       repaymentDuration,
       financeType === 'Weekly' ? weeklyCollectionDay : null,
-      financeType === 'Monthly' ? monthlyCollectionDay : null
+      financeType === 'Monthly' ? monthlyCollectionDay : null,
+      paymentDateIso || null
     );
-  }, [startDateIso, financeType, repaymentDuration, weeklyCollectionDay, monthlyCollectionDay]);
+  }, [startDateIso, financeType, repaymentDuration, weeklyCollectionDay, monthlyCollectionDay, paymentDateIso]);
 
   if (!isOpen || !borrower) return null;
 
@@ -268,7 +316,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     } else if (numBookNo < 1 || numBookNo > 1000) {
       newErrors.bookNo = 'Book No must be between 1 and 1000';
     } else if (usedBookNos.has(numBookNo)) {
-      newErrors.bookNo = `Book No ${numBookNo} is already assigned to another borrower.`;
+      newErrors.bookNo = `Book No ${numBookNo} is already assigned to another borrower. Please select another Book No.`;
     }
 
     if (!borrowerName.trim()) {
@@ -285,7 +333,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     if (alternatePhoneNumber.trim()) {
       const cleanAlt = alternatePhoneNumber.replace(/\D/g, '');
       if (cleanAlt.length !== 10) {
-        newErrors.alternatePhoneNumber = 'Alternate Phone must be exactly 10 digits';
+        newErrors.alternatePhoneNumber = 'Alternate Phone Number must be exactly 10 digits';
       }
     }
 
@@ -305,14 +353,14 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     }
 
     if (!isNaN(loanVal) && (parsedDeductedAmount + parsedAgentCommission) > loanVal) {
-      newErrors.loanAmount = 'The sum of Deducted Amount and Agent Commission cannot exceed the Loan Amount.';
+      newErrors.deductedAmount = 'The sum of Deducted Amount and Agent Commission cannot exceed the Loan Amount.';
     }
 
     const expReturnVal = parseFloat(expectedReturn);
     if (!expectedReturn.trim() || isNaN(expReturnVal) || expReturnVal <= 0) {
       newErrors.expectedReturn = 'Expected Return is required';
     } else if (!isNaN(loanVal) && expReturnVal < loanVal) {
-      newErrors.expectedReturn = 'Expected Return cannot be less than Loan Amount';
+      newErrors.expectedReturn = 'Expected Return must be greater than or equal to Loan Amount';
     } else if (totalPaid > 0 && expReturnVal < totalPaid) {
       newErrors.expectedReturn = `Cannot reduce Expected Return to ₹${expReturnVal.toLocaleString(
         'en-IN'
@@ -324,7 +372,7 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     }
 
     if (!startDateIso) {
-      newErrors.startDate = 'Start Date is required';
+      newErrors.startDate = 'Due Start Date is required';
     }
 
     if (financeType === 'Weekly') {
@@ -343,6 +391,10 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
       newErrors.collectionLine = 'No collection lines available.';
     } else if (!collectionLine || !collectionLine.trim()) {
       newErrors.collectionLine = 'Please select a valid Line';
+    }
+
+    if (!collectionMethod || !COLLECTION_METHODS.includes(collectionMethod)) {
+      newErrors.collectionMethod = 'Please select a valid Collection Method';
     }
 
     setErrors(newErrors);
@@ -392,10 +444,10 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
     const numBookNo = parseInt(bookNo, 10);
     const loanVal = parseFloat(loanAmount);
     const expReturnVal = parseFloat(expectedReturn);
-    const interestVal = loanVal > 0 ? ((expReturnVal - loanVal) / loanVal) * 100 : 0;
+    const interestVal = parseFloat(calculatedInterestRate?.replace('%', '') || '0');
 
     const payload: Partial<NewBorrowerInput> = {
-      bookNo: numBookNo,
+      bookNo: isNaN(numBookNo) ? null : numBookNo,
       borrowerName: borrowerName.trim(),
       phoneNumber: phoneNumber.trim(),
       alternatePhoneNumber: alternatePhoneNumber.trim() || undefined,
@@ -403,18 +455,21 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
       financeType,
       weeklyCollectionDay: financeType === 'Weekly' ? weeklyCollectionDay : null,
       monthlyCollectionDay: financeType === 'Monthly' ? monthlyCollectionDay : null,
-      collectionLine: collectionLine.trim() || undefined,
-      collectionMethod,
+      collectionLine: collectionLine ? collectionLine.trim() : null,
+      collectionMethod: collectionMethod ? collectionMethod.trim() : 'Hand Cash',
       agentId: currentRole === 'manager' ? (selectedAgentId || undefined) : borrower.agentId,
       agentCommission: parsedAgentCommission,
+      parcelTokenMode,
       loanAmount: loanVal,
       deductedAmount: parsedDeductedAmount,
       netAmountGiven: calculatedNetAmountGiven,
       expectedReturn: expReturnVal,
-      interestRate: Math.round(interestVal * 100) / 100,
+      interestRate: interestVal,
       repaymentDuration,
-      startDate: startDateIso,
+      paymentDate: paymentDateIso ? formattedPaymentDate : undefined,
+      startDate: formattedStartDate,
       endDate: calculatedEndDate || undefined,
+      isExistingLoan,
     };
 
     const res = await updateBorrower(borrower.id, payload);
@@ -432,17 +487,17 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-        <div className="w-full max-w-[820px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
-          {/* Header */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-sm">
+        <div className="w-full max-w-[820px] max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          {/* Header - Fixed at Top */}
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white z-10">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
+              <h2 className="text-lg sm:text-xl font-bold text-[#1e293b]">
                 Edit Borrower
-              </span>
-              <h2 className="text-xl font-bold text-[#1e293b] mt-0.5">
-                {borrower.borrowerName || borrower.name}
               </h2>
+              <p className="text-xs text-[#64748b] mt-0.5">
+                {borrower.borrowerName || borrower.name} (Book #{borrower.bookNo || '—'})
+              </p>
             </div>
             <button
               type="button"
@@ -455,221 +510,140 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
           </div>
 
           {/* Form Body - Scrollable */}
-          <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+          <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
             {submitError && (
-              <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2">
-                <AlertCircle size={18} className="text-red-500 shrink-0" />
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-rose-700 text-xs sm:text-sm font-medium animate-in fade-in">
+                <AlertCircle size={18} className="shrink-0 mt-0.5 text-rose-600" />
                 <span>{submitError}</span>
               </div>
             )}
 
-            {/* Section 1: Identity & Contact */}
+            {/* Section 1: Basic Information */}
             <div className="space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748b] border-b border-slate-100 pb-1.5">
-                Borrower Information
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
+                Borrower Details
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Book No */}
+              {/* Row 1: Book No, Borrower Name, Phone Number, Alternate Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. Book No */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                     Book No <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
                     min="1"
                     max="1000"
-                    required
+                    step="1"
                     value={bookNo}
                     onChange={(e) => setBookNo(e.target.value)}
-                    placeholder="1 to 1000"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.bookNo ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm focus:outline-none focus:border-[#4f46e5] transition-all`}
+                    placeholder="Enter Book No (e.g. 1)"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
                   />
-                  {errors.bookNo && <p className="text-[11px] text-red-500 mt-1">{errors.bookNo}</p>}
+                  {errors.bookNo && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.bookNo}</p>
+                  )}
                 </div>
 
-                {/* Borrower Name */}
+                {/* 2. Borrower Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                     Borrower Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    required
                     value={borrowerName}
                     onChange={(e) => setBorrowerName(e.target.value)}
-                    placeholder="Full name"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.borrowerName ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm focus:outline-none focus:border-[#4f46e5] transition-all`}
+                    placeholder="Enter borrower name"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
                   />
                   {errors.borrowerName && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.borrowerName}</p>
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.borrowerName}</p>
                   )}
                 </div>
 
-                {/* Phone Number */}
+                {/* 3. Phone Number */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
                     Phone Number <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    required
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
-                    placeholder="10-digit mobile"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.phoneNumber ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm focus:outline-none focus:border-[#4f46e5] transition-all`}
-                  />
-                  {errors.phoneNumber && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.phoneNumber}</p>
-                  )}
-                </div>
-
-                {/* Alternate Phone */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Alternate Phone
-                  </label>
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    value={alternatePhoneNumber}
-                    onChange={(e) => setAlternatePhoneNumber(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Optional 10-digit mobile"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.alternatePhoneNumber ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm focus:outline-none focus:border-[#4f46e5] transition-all`}
-                  />
-                  {errors.alternatePhoneNumber && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.alternatePhoneNumber}</p>
-                  )}
-                </div>
-
-                {/* Address */}
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">Address</label>
-                  <textarea
-                    rows={2}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Borrower full residential/business address"
-                    className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4f46e5] transition-all resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2: Collection & Assignment */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748b] border-b border-slate-100 pb-1.5">
-                Collection & Assignment
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Collection Line */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Collection Line <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={collectionLine}
-                    onChange={(e) => setCollectionLine(e.target.value)}
-                    className={`w-full h-10 px-3 rounded-xl border ${
-                      errors.collectionLine ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]`}
-                  >
-                    {activeLines.map((l) => (
-                      <option key={l.id} value={l.name}>
-                        {l.name}
-                      </option>
-                    ))}
-                    {inactiveAssignedLine && (
-                      <option value={inactiveAssignedLine}>
-                        {inactiveAssignedLine} (Inactive)
-                      </option>
-                    )}
-                  </select>
-                  {errors.collectionLine && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.collectionLine}</p>
-                  )}
-                </div>
-
-                {/* Collection Method */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Collection Method
-                  </label>
-                  <select
-                    value={collectionMethod}
-                    onChange={(e) => setCollectionMethod(e.target.value as CollectionMethod)}
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
-                  >
-                    {COLLECTION_METHODS.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Assigned Agent */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Assigned Agent {currentRole === 'agent' && <span className="text-slate-400 font-normal">(Locked)</span>}
-                  </label>
-                  {currentRole === 'agent' ? (
-                    <input
-                      type="text"
-                      disabled
-                      value={borrower.assignedAgent || currentUser?.fullName || 'Assigned to You'}
-                      className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-500 cursor-not-allowed"
+                  <div className="relative">
+                    <Phone
+                      size={16}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
                     />
-                  ) : (
-                    <select
-                      value={selectedAgentId}
-                      onChange={(e) => handleAgentChange(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
-                    >
-                      <option value="">Unassigned (Manager Collects)</option>
-                      {activeAgents.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.fullName}
-                        </option>
-                      ))}
-                      {inactiveAssignedAgent && (
-                        <option value={inactiveAssignedAgent.id}>
-                          {inactiveAssignedAgent.fullName} (Inactive)
-                        </option>
-                      )}
-                    </select>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="10-digit mobile number"
+                      className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                    />
+                  </div>
+                  {errors.phoneNumber && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.phoneNumber}</p>
+                  )}
+                </div>
+
+                {/* 4. Alternate Phone Number */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Alternate Phone (Optional)
+                  </label>
+                  <div className="relative">
+                    <Phone
+                      size={16}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    />
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={alternatePhoneNumber}
+                      onChange={(e) => setAlternatePhoneNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Optional 10-digit mobile"
+                      className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                    />
+                  </div>
+                  {errors.alternatePhoneNumber && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.alternatePhoneNumber}</p>
                   )}
                 </div>
               </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Address
+                </label>
+                <textarea
+                  rows={2}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Enter full address"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all resize-none"
+                />
+              </div>
             </div>
 
-            {/* Section 3: Financial & Loan Configuration */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#64748b] border-b border-slate-100 pb-1.5">
-                Financial Details & Schedule
+            {/* Section 2: Loan & Finance Configuration */}
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#4f46e5]">
+                Loan Configuration
               </h3>
 
-              {/* Row 1: Finance Type, Schedule Day/Date, Repayment Duration */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Finance Type, Repayment Duration, Assign to Agent, Line, Collection Method, Parcel Token Mode */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
                 {/* Finance Type */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Finance Type
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Finance Type <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={financeType}
                     onChange={(e) => handleFinanceTypeChange(e.target.value as Timeframe)}
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                   >
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly</option>
@@ -677,16 +651,282 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
                   </select>
                 </div>
 
-                {/* Schedule Day/Date */}
-                {financeType === 'Weekly' ? (
+                {/* Repayment Duration */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Repayment Duration <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={repaymentDuration}
+                    onChange={(e) => setRepaymentDuration(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer font-medium"
+                  >
+                    {DURATION_OPTIONS[financeType].map((dur) => (
+                      <option key={dur} value={dur}>
+                        {dur}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.repaymentDuration && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.repaymentDuration}</p>
+                  )}
+                </div>
+
+                {/* Assign to Agent */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Assign to Agent
+                  </label>
+                  {currentRole === 'agent' ? (
+                    <div className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-medium flex items-center justify-between select-none">
+                      <span className="truncate">{borrower.assignedAgent || currentUser?.fullName || 'Assigned to You'}</span>
+                      <span className="text-[11px] font-semibold bg-indigo-50 text-[#4f46e5] px-2 py-0.5 rounded-md shrink-0 ml-2">
+                        You
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedAgentId}
+                      onChange={(e) => handleAgentChange(e.target.value)}
+                      disabled={activeAgents.length === 0 && !inactiveAssignedAgent}
+                      className={`w-full h-11 px-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#4f46e5] transition-all ${
+                        activeAgents.length === 0 && !inactiveAssignedAgent
+                          ? 'bg-slate-50/70 text-slate-400 cursor-not-allowed'
+                          : 'bg-white text-[#1e293b] cursor-pointer'
+                      }`}
+                    >
+                      {activeAgents.length === 0 && !inactiveAssignedAgent ? (
+                        <option value="">No Agents Available</option>
+                      ) : (
+                        <>
+                          <option value="">Select an Agent (Optional)</option>
+                          {inactiveAssignedAgent && (
+                            <option value={inactiveAssignedAgent.id}>
+                              {inactiveAssignedAgent.fullName} (Inactive)
+                            </option>
+                          )}
+                          {activeAgents.map((agent) => (
+                            <option key={agent.id} value={agent.id}>
+                              {agent.fullName}
+                            </option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                  )}
+                </div>
+
+                {/* Line Dropdown */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Line <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={collectionLine}
+                    onChange={(e) => setCollectionLine(e.target.value)}
+                    disabled={activeLines.length === 0 && !inactiveAssignedLine}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  >
+                    {activeLines.length === 0 && !inactiveAssignedLine ? (
+                      <option value="" disabled>
+                        No collection lines available — Create a Line in Profile → Collection Lines
+                      </option>
+                    ) : (
+                      <>
+                        {activeLines.map((line) => (
+                          <option key={line.id} value={line.name}>
+                            {line.name}
+                          </option>
+                        ))}
+                        {inactiveAssignedLine && !activeLines.some((l) => l.name === inactiveAssignedLine) && (
+                          <option value={inactiveAssignedLine}>
+                            {inactiveAssignedLine} (Inactive)
+                          </option>
+                        )}
+                      </>
+                    )}
+                  </select>
+                  {errors.collectionLine && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.collectionLine}</p>
+                  )}
+                </div>
+
+                {/* Collection Method Dropdown */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Collection Method <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={collectionMethod}
+                    onChange={(e) => setCollectionMethod(e.target.value as CollectionMethod)}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                  >
+                    {COLLECTION_METHODS.map((method) => (
+                      <option key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.collectionMethod && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.collectionMethod}</p>
+                  )}
+                </div>
+
+                {/* Parcel Token Mode */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Parcel Token Mode
+                  </label>
+                  <div className="flex items-center gap-2.5 h-11">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={parcelTokenMode}
+                      onClick={() => setParcelTokenMode(!parcelTokenMode)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out ${
+                        parcelTokenMode ? 'bg-[#4f46e5]' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                          parcelTokenMode ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs font-semibold text-[#64748b]">
+                      {parcelTokenMode ? 'ON' : 'OFF'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Amounts: Loan Amount | Agent Commission | Deducted Amount | Expected Return */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 items-start">
+                {/* 1. Loan Amount */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                    Loan Amount (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={loanAmount}
+                    onChange={(e) => setLoanAmount(e.target.value)}
+                    placeholder="e.g. 10000"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                  />
+                  {errors.loanAmount && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.loanAmount}</p>
+                  )}
+                </div>
+
+                {/* 2. Agent Commission */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                    Agent Commission (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={agentCommission}
+                    onChange={(e) => {
+                      setAgentCommission(e.target.value);
+                      if (errors.agentCommission || errors.deductedAmount) {
+                        setErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.agentCommission;
+                          delete copy.deductedAmount;
+                          return copy;
+                        });
+                      }
+                    }}
+                    placeholder="e.g. 300"
+                    className={`w-full h-11 px-3.5 rounded-xl border ${
+                      errors.agentCommission ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                    } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
+                  />
+                  {errors.agentCommission && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.agentCommission}</p>
+                  )}
+                </div>
+
+                {/* 3. Deducted Amount */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                    Deducted Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={deductedAmount}
+                    onChange={(e) => {
+                      setDeductedAmount(e.target.value);
+                      if (errors.agentCommission || errors.deductedAmount) {
+                        setErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.agentCommission;
+                          delete copy.deductedAmount;
+                          return copy;
+                        });
+                      }
+                    }}
+                    placeholder="e.g. 400"
+                    className={`w-full h-11 px-3.5 rounded-xl border ${
+                      errors.deductedAmount ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                    } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
+                  />
+                  {errors.deductedAmount && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.deductedAmount}</p>
+                  )}
+                </div>
+
+                {/* 4. Expected Return */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
+                    Expected Return (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={expectedReturn}
+                    onChange={(e) => setExpectedReturn(e.target.value)}
+                    placeholder="e.g. 10500"
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
+                  />
+                  {errors.expectedReturn && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.expectedReturn}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Interest Rate, Dynamic Collection Day/Date, Payment Date, Due Start Date, Due End Date */}
+              <div className={`grid grid-cols-1 sm:grid-cols-2 ${financeType === 'Daily' ? 'lg:grid-cols-4' : 'lg:grid-cols-5'} gap-4`}>
+                {/* Interest Rate (AUTO-CALCULATED) */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Interest Rate (%)
+                  </label>
+                  <div className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold flex items-center select-none">
+                    {calculatedInterestRate || (
+                      <span className="text-slate-400 font-normal">Auto-calculated</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dynamic Collection Day (Weekly) */}
+                {financeType === 'Weekly' && (
                   <div>
-                    <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                      Weekly Collection Day <span className="text-red-500">*</span>
+                    <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                      Collection Day <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={weeklyCollectionDay}
-                      onChange={(e) => setWeeklyCollectionDay(Number(e.target.value))}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
+                      onChange={(e) => handleWeeklyCollectionDayChange(parseInt(e.target.value, 10))}
+                      className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                     >
                       <option value={1}>Monday</option>
                       <option value={2}>Tuesday</option>
@@ -696,223 +936,136 @@ export const EditBorrowerModal: React.FC<EditBorrowerModalProps> = ({
                       <option value={6}>Saturday</option>
                       <option value={7}>Sunday</option>
                     </select>
+                    {errors.weeklyCollectionDay && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">{errors.weeklyCollectionDay}</p>
+                    )}
                   </div>
-                ) : financeType === 'Monthly' ? (
+                )}
+
+                {/* Dynamic Collection Date (Monthly) */}
+                {financeType === 'Monthly' && (
                   <div>
-                    <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                      Monthly Collection Date <span className="text-red-500">*</span>
+                    <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                      Collection Date <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={monthlyCollectionDay}
-                      onChange={(e) => setMonthlyCollectionDay(Number(e.target.value))}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
+                      onChange={(e) => handleMonthlyCollectionDayChange(parseInt(e.target.value, 10))}
+                      className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                     >
                       {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                         <option key={d} value={d}>
                           {d}
-                          {d === 1 || d === 21 || d === 31
-                            ? 'st'
-                            : d === 2 || d === 22
-                            ? 'nd'
-                            : d === 3 || d === 23
-                            ? 'rd'
-                            : 'th'}{' '}
-                          of month
                         </option>
                       ))}
                     </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                      Collection Schedule
-                    </label>
-                    <input
-                      type="text"
-                      disabled
-                      value="Daily"
-                      className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-500 cursor-not-allowed"
-                    />
+                    {errors.monthlyCollectionDay && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">{errors.monthlyCollectionDay}</p>
+                    )}
                   </div>
                 )}
 
-                {/* Repayment Duration */}
+                {/* Payment Date (Loan Disbursement Date - Optional / Editable) */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Repayment Duration <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={repaymentDuration}
-                    onChange={(e) => setRepaymentDuration(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
-                  >
-                    {DURATION_OPTIONS[financeType].map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 2: Financial Amounts: Loan Amount | Agent Commission | Deducted Amount | Expected Return */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 items-start">
-                {/* 1. Loan Amount */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
-                    Loan Amount (₹) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    required
-                    value={loanAmount}
-                    onChange={(e) => setLoanAmount(e.target.value)}
-                    placeholder="e.g. 20000"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.loanAmount ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm font-semibold text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5]`}
-                  />
-                  {errors.loanAmount && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.loanAmount}</p>
-                  )}
-                </div>
-
-                {/* 2. Agent Commission (Manual - Editable) */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
-                    Agent Commission (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={agentCommission}
-                    onChange={(e) => setAgentCommission(e.target.value)}
-                    placeholder="e.g. 1000"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.agentCommission ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm font-semibold text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5]`}
-                  />
-                  {errors.agentCommission && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.agentCommission}</p>
-                  )}
-                </div>
-
-                {/* 3. Deducted Amount (Manual - Editable) */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
-                    Deducted Amount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={deductedAmount}
-                    onChange={(e) => setDeductedAmount(e.target.value)}
-                    placeholder="e.g. 1400"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.deductedAmount ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm font-semibold text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5]`}
-                  />
-                  {errors.deductedAmount && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.deductedAmount}</p>
-                  )}
-                </div>
-
-                {/* 4. Expected Return */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
-                    Expected Return (₹) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    required
-                    value={expectedReturn}
-                    onChange={(e) => setExpectedReturn(e.target.value)}
-                    placeholder="e.g. 21000"
-                    className={`w-full h-10 px-3.5 rounded-xl border ${
-                      errors.expectedReturn ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm font-semibold text-[#1e293b] placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5]`}
-                  />
-                  {errors.expectedReturn && (
-                    <p className="text-[11px] text-red-500 mt-1">{errors.expectedReturn}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 3: Start Date, Projected End Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Start Date */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Start Date <span className="text-red-500">*</span>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Payment Date
                   </label>
                   <input
                     type="date"
-                    required
-                    value={startDateIso}
-                    onChange={(e) => setStartDateIso(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5]"
+                    value={paymentDateIso}
+                    onChange={(e) => handlePaymentDateChange(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                   />
+                  <p className="text-[11px] text-[#64748b] mt-1 font-medium">
+                    Selected: <span className="text-[#1e293b] font-semibold">{formattedPaymentDate || '—'}</span>
+                  </p>
+                  {errors.paymentDate && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.paymentDate}</p>
+                  )}
                 </div>
 
-                {/* Computed End Date */}
+                {/* Due Start Date */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#1e293b] mb-1">
-                    Projected End Date
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Due Start Date <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="text"
-                    disabled
-                    value={calculatedEndDate || '—'}
-                    className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-600 cursor-not-allowed"
+                    type="date"
+                    value={startDateIso}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
                   />
+                  <p className="text-[11px] text-[#64748b] mt-1 font-medium">
+                    Selected: <span className="text-[#1e293b] font-semibold">{formattedStartDate || '—'}</span>
+                  </p>
+                  {errors.startDate && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{errors.startDate}</p>
+                  )}
+                </div>
+
+                {/* Due End Date (AUTO-CALCULATED) */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                    Due End Date
+                  </label>
+                  <div className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold flex items-center select-none">
+                    {calculatedEndDate || <span className="text-slate-400 font-normal">Auto-calculated</span>}
+                  </div>
+                  <p className="text-[11px] text-[#64748b] mt-1">
+                    Inclusive count ({repaymentDuration})
+                  </p>
                 </div>
               </div>
 
-              {/* Real-time Financial Breakdown Summary Card */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-600">Net Amount Given to Borrower:</span>
-                  <span className="font-bold text-slate-900 text-sm">
-                    ₹{calculatedNetAmountGiven.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                {calculatedInterestRate && (
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-600">Calculated Interest Rate:</span>
-                    <span className="font-bold text-indigo-600">{calculatedInterestRate}</span>
-                  </div>
-                )}
-                {totalPaid > 0 && (
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-200">
-                    <span className="font-semibold text-emerald-700">Total Collected So Far:</span>
-                    <span className="font-bold text-emerald-700">
-                      ₹{totalPaid.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                )}
+              {/* Existing Loan Checkbox */}
+              <div className="flex items-center pt-2">
+                <input
+                  id="edit-existing-loan-checkbox"
+                  type="checkbox"
+                  checked={isExistingLoan}
+                  onChange={(e) => setIsExistingLoan(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#4f46e5] border-slate-300 focus:ring-[#4f46e5] accent-[#4f46e5] cursor-pointer"
+                />
+                <label
+                  htmlFor="edit-existing-loan-checkbox"
+                  className="ml-2.5 text-xs sm:text-sm font-medium text-[#475569] cursor-pointer select-none"
+                >
+                  This is an existing loan (manage past payments after saving)
+                </label>
               </div>
             </div>
 
-            {/* Modal Actions */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+            {/* Highlighted Bottom Summary: Net Amount Given */}
+            <div className="p-4 rounded-xl bg-[#f5f6ff] border border-[#e0e7ff] flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs sm:text-sm font-semibold text-[#64748b] block">
+                  Summary Calculation:
+                </span>
+                {totalPaid > 0 && (
+                  <span className="text-xs font-semibold text-emerald-700 block">
+                    Total Collected So Far: ₹{totalPaid.toLocaleString('en-IN')}
+                  </span>
+                )}
+              </div>
+              <span className="text-sm sm:text-base font-bold text-[#4f46e5]">
+                Net Amount Given: ₹{calculatedNetAmountGiven.toLocaleString('en-IN')}
+              </span>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                className="h-11 px-5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-50 active:scale-[0.99] transition-all"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2.5 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.98] transition-all flex items-center gap-1.5 disabled:opacity-50"
+                className="h-11 px-6 rounded-xl bg-[#4f46e5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-[#4338ca] active:scale-[0.99] transition-all flex items-center gap-1.5 disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>
