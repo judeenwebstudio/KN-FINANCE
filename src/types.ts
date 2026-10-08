@@ -98,6 +98,7 @@ export interface Borrower {
   repaymentDuration: string;
   startDate: string;
   endDate: string;
+  paymentDate?: string | null; // Loan disbursement date
   isExistingLoan: boolean;
   status: 'active' | 'closed';
   dateAdded: string;
@@ -127,6 +128,7 @@ export type NewBorrowerInput = {
   repaymentDuration: string;
   startDate: string;
   endDate: string;
+  paymentDate?: string; // Loan disbursement date
   isExistingLoan: boolean;
 };
 

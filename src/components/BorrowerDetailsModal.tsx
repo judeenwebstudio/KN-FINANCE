@@ -591,6 +591,13 @@ export const BorrowerDetailsModal: React.FC<BorrowerDetailsModalProps> = ({
                 </div>
 
                 <div>
+                  <span className="text-slate-400 block text-[11px] font-medium">Payment Date</span>
+                  <span className="font-semibold text-[#1e293b]">
+                    {borrower.paymentDate ? formatAppDate(borrower.paymentDate, settings.dateFormat) : '—'}
+                  </span>
+                </div>
+
+                <div>
                   <span className="text-slate-400 block text-[11px] font-medium">Start Date</span>
                   <span className="font-semibold text-[#1e293b]">
                     {borrower.startDate ? formatAppDate(borrower.startDate, settings.dateFormat) : '—'}

@@ -168,6 +168,7 @@ function mapDbBorrowerToApp(row: any, allAgents: AgentUser[]): Borrower {
     repaymentDuration: row.repayment_duration || '50 Days',
     startDate: row.start_date || '',
     endDate: row.end_date || '',
+    paymentDate: row.payment_date || null,
     isExistingLoan: Boolean(row.existing_loan),
     status: (row.status as 'active' | 'closed') || 'active',
     dateAdded: row.created_at || new Date().toISOString(),
@@ -1264,6 +1265,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const startIso = toDbDate(data.startDate) || getTodayIsoDate();
         const endIso = toDbDate(data.endDate);
+        const paymentIso = toDbDate(data.paymentDate) || getTodayIsoDate();
 
         const { data: insertedData, error } = await (supabase as any)
           .from('borrowers')
@@ -1289,6 +1291,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             repayment_duration: data.repaymentDuration,
             start_date: startIso,
             end_date: endIso,
+            payment_date: paymentIso,
             existing_loan: Boolean(data.isExistingLoan),
             parcel_token_mode: Boolean(data.parcelTokenMode),
             status: 'active',
@@ -1352,6 +1355,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'active',
       dateAdded: now,
       createdAt: now,
+      paymentDate: data.paymentDate || getTodayIsoDate(),
     };
     setBorrowers(prev => [newBorrower, ...prev]);
 
@@ -1457,6 +1461,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return { success: false, error: res.error || 'Failed to update borrower.' };
         }
 
+        // Dedicated minimal Payment Date update if provided
+        if (data.paymentDate !== undefined && data.paymentDate !== null && data.paymentDate !== '') {
+          const paymentIso = toDbDate(data.paymentDate);
+          if (paymentIso) {
+            const { error: pDateErr } = await (supabase as any).rpc('update_borrower_payment_date', {
+              p_borrower_id: id,
+              p_payment_date: paymentIso,
+            });
+            if (pDateErr) {
+              console.warn('update_borrower_payment_date RPC warning:', pDateErr.message);
+            }
+          }
+        }
+
         await fetchCloudData();
         return { success: true };
       } catch (err: any) {
@@ -1507,6 +1525,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           repaymentDuration: data.repaymentDuration || borrower.repaymentDuration,
           startDate: data.startDate || borrower.startDate,
           endDate: data.endDate || borrower.endDate,
+          paymentDate: data.paymentDate !== undefined ? data.paymentDate : borrower.paymentDate,
           status: newStatus,
           agentId: data.agentId !== undefined ? data.agentId : borrower.agentId,
         };

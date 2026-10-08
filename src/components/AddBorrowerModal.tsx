@@ -85,6 +85,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const [deductedAmount, setDeductedAmount] = useState('');
   const [expectedReturn, setExpectedReturn] = useState('');
   const [repaymentDuration, setRepaymentDuration] = useState('50 Days');
+  const [paymentDateIso, setPaymentDateIso] = useState(getTodayIsoDate());
   const [startDateIso, setStartDateIso] = useState(getTodayIsoDate());
   const [isExistingLoan, setIsExistingLoan] = useState(false);
 
@@ -188,6 +189,9 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setDeductedAmount(initialBorrower.deductedAmount !== undefined && initialBorrower.deductedAmount !== null ? String(initialBorrower.deductedAmount) : '');
         setExpectedReturn((initialBorrower.expectedReturn || '').toString());
         setRepaymentDuration(initialBorrower.repaymentDuration || '50 Days');
+        const todayIso = getTodayIsoDate();
+        const parsedPayment = initialBorrower.paymentDate ? parseCustomDate(initialBorrower.paymentDate) : null;
+        setPaymentDateIso(initialBorrower.paymentDate ? (parsedPayment ? parsedPayment.toISOString().split('T')[0] : initialBorrower.paymentDate.substring(0, 10)) : todayIso);
         setIsExistingLoan(Boolean(initialBorrower.isExistingLoan));
       } else {
         const initialType = settings?.defaultFinanceType || timeframe || 'Daily';
@@ -206,6 +210,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setCollectionMethod('Hand Cash');
         const initialDurations = DURATION_OPTIONS[initialType];
         setRepaymentDuration(initialDurations[1] || initialDurations[0]);
+        setPaymentDateIso(todayIso);
         setStartDateIso(todayIso);
         const targetAgentId = currentRole === 'agent' && currentUser?.companyUserId
           ? currentUser.companyUserId
@@ -303,6 +308,13 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return `${d}/${m}/${y}`;
   }, [startDateIso]);
 
+  // Formatted payment date for display
+  const formattedPaymentDate = useMemo(() => {
+    if (!paymentDateIso) return '';
+    const [y, m, d] = paymentDateIso.split('-');
+    return `${d}/${m}/${y}`;
+  }, [paymentDateIso]);
+
   if (!isOpen) return null;
 
   const validate = () => {
@@ -349,6 +361,10 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
     if (!repaymentDuration) {
       newErrors.repaymentDuration = 'Repayment Duration is required';
+    }
+
+    if (!paymentDateIso) {
+      newErrors.paymentDate = 'Payment Date is required';
     }
 
     if (!startDateIso) {
@@ -483,6 +499,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       expectedReturn: expReturnVal,
       interestRate: interestVal,
       repaymentDuration,
+      paymentDate: formattedPaymentDate,
       startDate: formattedStartDate,
       endDate: calculatedEndDate,
       isExistingLoan,
@@ -977,8 +994,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
               </div>
             </div>
 
-            {/* Interest Rate, Dynamic Collection Day/Date, Start Date, End Date */}
-            <div className={`grid grid-cols-1 sm:grid-cols-2 ${financeType === 'Daily' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
+            {/* Interest Rate, Dynamic Collection Day/Date, Payment Date, Start Date, End Date */}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${financeType === 'Daily' ? 'lg:grid-cols-4' : 'lg:grid-cols-5'} gap-4`}>
               {/* Interest Rate (AUTO-CALCULATED) */}
               <div>
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
@@ -1038,6 +1055,25 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                   )}
                 </div>
               )}
+
+              {/* Payment Date (Loan Disbursement Date - Mandatory) */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5">
+                  Payment Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={paymentDateIso}
+                  onChange={(e) => setPaymentDateIso(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-200 bg-white text-sm text-[#1e293b] focus:outline-none focus:border-[#4f46e5] transition-all cursor-pointer"
+                />
+                <p className="text-[11px] text-[#64748b] mt-1 font-medium">
+                  Selected: <span className="text-[#1e293b] font-semibold">{formattedPaymentDate}</span>
+                </p>
+                {errors.paymentDate && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.paymentDate}</p>
+                )}
+              </div>
 
               {/* Start Date */}
               <div>
