@@ -158,34 +158,55 @@ export function formatCollectionSchedule(borrower: Partial<Borrower>): string {
 }
 
 /**
- * Calculates the default suggested Due Start Date based on Payment Date, Finance Type, and Collection Day.
- * For Weekly: The next occurrence of weeklyCollectionDay strictly AFTER paymentDateIso.
- * For Daily & Monthly: Defaults to paymentDateIso.
+ * Calculates the default suggested Due Start Date based on Payment Date, Finance Type, and Collection Day/Date.
+ * - For Weekly: The first occurrence of the selected Collection Day on or after Payment Date + 7 calendar days.
+ * - For Monthly: The first valid occurrence of the selected Collection Date on or after Payment Date + 1 calendar month.
+ * - For Daily: Defaults to paymentDateIso.
  */
 export function calculateSuggestedDueStartDate(
   paymentDateIso: string,
   financeType: Timeframe,
-  weeklyCollectionDay?: number | null
+  weeklyCollectionDay?: number | null,
+  monthlyCollectionDay?: number | null
 ): string {
   if (!paymentDateIso) return getTodayIsoDate();
   const payDate = parseCustomDate(paymentDateIso);
   if (!payDate) return paymentDateIso;
 
   if (financeType === 'Weekly') {
-    const jsDay = payDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    const currentDay1to7 = jsDay === 0 ? 7 : jsDay;
+    // At least 7 calendar days after Payment Date
+    const baseDate = new Date(payDate.getFullYear(), payDate.getMonth(), payDate.getDate() + 7);
+    const baseWeekday = baseDate.getDay() === 0 ? 7 : baseDate.getDay();
     const targetDay = weeklyCollectionDay && weeklyCollectionDay >= 1 && weeklyCollectionDay <= 7
       ? weeklyCollectionDay
-      : currentDay1to7;
-    let daysToAdd = (targetDay - currentDay1to7 + 7) % 7;
-    if (daysToAdd === 0) {
-      daysToAdd = 7; // Strictly AFTER Payment Date
-    }
-    const suggested = new Date(payDate.getFullYear(), payDate.getMonth(), payDate.getDate() + daysToAdd);
+      : (payDate.getDay() === 0 ? 7 : payDate.getDay());
+    const daysToAdd = (targetDay - baseWeekday + 7) % 7;
+    const suggested = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + daysToAdd);
     return toIsoDate(suggested);
   }
 
-  // Daily and Monthly: defaults to paymentDateIso
+  if (financeType === 'Monthly') {
+    // At least 1 calendar month after Payment Date on selected collection date
+    const targetDay = monthlyCollectionDay && monthlyCollectionDay >= 1 && monthlyCollectionDay <= 31
+      ? monthlyCollectionDay
+      : payDate.getDate();
+
+    const targetYear = payDate.getFullYear();
+    let targetMonthIndex = payDate.getMonth() + 1; // 1 calendar month later
+    if (payDate.getDate() > targetDay) {
+      targetMonthIndex += 1;
+    }
+
+    const tempDate = new Date(targetYear, targetMonthIndex, 1);
+    const validYear = tempDate.getFullYear();
+    const validMonth = tempDate.getMonth();
+    const lastDayOfMonth = new Date(validYear, validMonth + 1, 0).getDate();
+    const validDay = Math.min(targetDay, lastDayOfMonth);
+    const suggested = new Date(validYear, validMonth, validDay);
+    return toIsoDate(suggested);
+  }
+
+  // Daily: defaults to Payment Date
   return paymentDateIso;
 }
 
