@@ -243,7 +243,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       setRepaymentDuration(options[1] || options[0]);
     }
     if (!initialBorrower && !isStartDateManuallyEdited) {
-      const suggested = calculateSuggestedDueStartDate(paymentDateIso, newType, weeklyCollectionDay, monthlyCollectionDay);
+      const todayIso = getTodayIsoDate();
+      const suggested = calculateSuggestedDueStartDate(todayIso, newType, weeklyCollectionDay, monthlyCollectionDay);
       setStartDateIso(suggested);
     }
 
@@ -275,16 +276,13 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
 
   const handlePaymentDateChange = (newPaymentIso: string) => {
     setPaymentDateIso(newPaymentIso);
-    if (!initialBorrower && !isStartDateManuallyEdited) {
-      const suggested = calculateSuggestedDueStartDate(newPaymentIso, financeType, weeklyCollectionDay, monthlyCollectionDay);
-      setStartDateIso(suggested);
-    }
   };
 
   const handleWeeklyCollectionDayChange = (newDay: number) => {
     setWeeklyCollectionDay(newDay);
     if (!initialBorrower && !isStartDateManuallyEdited) {
-      const suggested = calculateSuggestedDueStartDate(paymentDateIso, 'Weekly', newDay, monthlyCollectionDay);
+      const todayIso = getTodayIsoDate();
+      const suggested = calculateSuggestedDueStartDate(todayIso, 'Weekly', newDay, monthlyCollectionDay);
       setStartDateIso(suggested);
     }
   };
@@ -292,7 +290,8 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
   const handleMonthlyCollectionDayChange = (newDay: number) => {
     setMonthlyCollectionDay(newDay);
     if (!initialBorrower && !isStartDateManuallyEdited) {
-      const suggested = calculateSuggestedDueStartDate(paymentDateIso, 'Monthly', weeklyCollectionDay, newDay);
+      const todayIso = getTodayIsoDate();
+      const suggested = calculateSuggestedDueStartDate(todayIso, 'Monthly', weeklyCollectionDay, newDay);
       setStartDateIso(suggested);
     }
   };
