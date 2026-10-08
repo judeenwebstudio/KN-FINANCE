@@ -186,16 +186,13 @@ export function calculateSuggestedDueStartDate(
   }
 
   if (financeType === 'Monthly') {
-    // At least 1 calendar month after Payment Date on selected collection date
+    // Next calendar month after Payment Date on selected collection date (with month-end clamping)
     const targetDay = monthlyCollectionDay && monthlyCollectionDay >= 1 && monthlyCollectionDay <= 31
       ? monthlyCollectionDay
       : payDate.getDate();
 
     const targetYear = payDate.getFullYear();
-    let targetMonthIndex = payDate.getMonth() + 1; // 1 calendar month later
-    if (payDate.getDate() > targetDay) {
-      targetMonthIndex += 1;
-    }
+    const targetMonthIndex = payDate.getMonth() + 1; // Always next calendar month
 
     const tempDate = new Date(targetYear, targetMonthIndex, 1);
     const validYear = tempDate.getFullYear();
