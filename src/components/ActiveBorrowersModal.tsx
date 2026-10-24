@@ -1,9 +1,11 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Image as ImageIcon, Printer, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Borrower } from '../types';
 import { resolveAgentName } from '../utils/agentUtils';
 import { formatCollectionSchedule } from '../utils/loanCalculations';
+
+export type FinanceTypeFilter = 'All' | 'Daily' | 'Weekly' | 'Monthly';
 
 interface ActiveBorrowersModalProps {
   isOpen: boolean;
@@ -28,6 +30,14 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
     getBorrowerLastPaymentDate,
   } = useApp();
   const printAreaRef = useRef<HTMLDivElement>(null);
+  const [selectedFinanceType, setSelectedFinanceType] = useState<FinanceTypeFilter>('All');
+
+  // Reset filter to All Borrowers when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedFinanceType('All');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -43,7 +53,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         )
       : borrowers;
 
-  // Filter all active borrowers for current role scope & selected line filter
+  // Filter all active borrowers for current role scope, selected line filter, and finance type filter
   const activeBorrowers = roleScopedBorrowers.filter((b) => {
     if (b.status !== 'active') return false;
 
@@ -56,12 +66,27 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
       }
     }
 
+    // Finance Type filter ('All' shows all; otherwise match saved financeType field)
+    if (selectedFinanceType !== 'All') {
+      const bFinanceType = b.financeType || 'Daily';
+      if (bFinanceType !== selectedFinanceType) {
+        return false;
+      }
+    }
+
     return true;
   });
 
   const borrowerCount = activeBorrowers.length;
+  const filterParts: string[] = [];
+  if (selectedFinanceType !== 'All') {
+    filterParts.push(selectedFinanceType);
+  }
+  if (selectedLine && selectedLine !== 'All Lines') {
+    filterParts.push(selectedLine);
+  }
   const countLabel = `${borrowerCount} ${borrowerCount === 1 ? 'borrower' : 'borrowers'}${
-    selectedLine && selectedLine !== 'All Lines' ? ` • ${selectedLine}` : ''
+    filterParts.length > 0 ? ` • ${filterParts.join(' • ')}` : ''
   }`;
 
   // Helper row calculations using shared payment helpers
@@ -236,26 +261,41 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
         className="w-full max-w-[1000px] max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
       >
         {/* Modal Header */}
-        <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-white z-10">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold tracking-tight text-[#1e293b]">
+        <div className="px-5 sm:px-6 py-3.5 sm:py-4.5 border-b border-slate-100 flex items-center justify-between gap-3 bg-white z-10">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-4 min-w-0">
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-[#1e293b] truncate">
                 Active Borrowers
               </h2>
+              <p className="text-xs sm:text-sm font-medium text-[#64748b] mt-0.5 truncate">
+                {countLabel}
+              </p>
             </div>
-            <p className="text-xs sm:text-sm font-medium text-[#64748b] mt-0.5">
-              {countLabel}
-            </p>
+
+            {/* Finance Type Dropdown Filter */}
+            <div className="no-print">
+              <select
+                value={selectedFinanceType}
+                onChange={(e) => setSelectedFinanceType(e.target.value as FinanceTypeFilter)}
+                className="h-8.5 sm:h-9 px-2.5 sm:px-3 text-xs sm:text-sm font-semibold text-[#1e293b] bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all cursor-pointer shadow-sm"
+                aria-label="Filter by Finance Type"
+              >
+                <option value="All">All Borrowers</option>
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
+                <option value="Monthly">Monthly</option>
+              </select>
+            </div>
           </div>
 
           {/* Action Icons in exact order: 1. Image/Export, 2. Print, 3. X Close */}
-          <div className="flex items-center gap-1.5 sm:gap-2 no-print">
+          <div className="flex items-center gap-1 sm:gap-2 no-print shrink-0">
             {/* 1. Image/Export */}
             <button
               type="button"
               onClick={handleExportImage}
               title="Export as Image"
-              className="p-2 text-slate-500 hover:text-[#4f46e5] hover:bg-indigo-50 rounded-xl transition-colors"
+              className="p-1.5 sm:p-2 text-slate-500 hover:text-[#4f46e5] hover:bg-indigo-50 rounded-xl transition-colors"
               aria-label="Export as Image"
             >
               <ImageIcon size={19} />
@@ -266,7 +306,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
               type="button"
               onClick={handlePrint}
               title="Print Report"
-              className="p-2 text-slate-500 hover:text-[#4f46e5] hover:bg-indigo-50 rounded-xl transition-colors"
+              className="p-1.5 sm:p-2 text-slate-500 hover:text-[#4f46e5] hover:bg-indigo-50 rounded-xl transition-colors"
               aria-label="Print Report"
             >
               <Printer size={19} />
@@ -277,7 +317,7 @@ export const ActiveBorrowersModal: React.FC<ActiveBorrowersModalProps> = ({
               type="button"
               onClick={onClose}
               title="Close"
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+              className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
               aria-label="Close"
             >
               <X size={20} />
