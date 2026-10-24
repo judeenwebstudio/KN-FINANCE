@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   BadgePercent,
@@ -31,6 +31,15 @@ export const AgentCommissionModal: React.FC<AgentCommissionModalProps> = ({
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
+
+  // Reset filters whenever modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedAgentId('all');
+      setSearchQuery('');
+    }
+  }, [isOpen]);
 
   // Role Scoped Borrowers:
   // - Agent: ONLY borrowers assigned to authenticated Agent
@@ -51,15 +60,56 @@ export const AgentCommissionModal: React.FC<AgentCommissionModalProps> = ({
     );
   }, [borrowers, currentRole, currentUser]);
 
-  // Total Agent Commission: Exact mathematical match to Dashboard Card
-  const totalCommission = useMemo(() => {
-    return scopedBorrowers.reduce((sum, b) => sum + (b.agentCommission || 0), 0);
-  }, [scopedBorrowers]);
+  // Available Agents for dropdown (Agents only see themselves; Managers see all company agents)
+  const availableAgents = useMemo(() => {
+    if (currentRole === 'agent') {
+      const agentUserId = currentUser?.companyUserId;
+      const agentName = currentUser?.fullName?.toLowerCase();
+      return agents.filter(
+        (a) =>
+          (agentUserId
+            ? a.id === agentUserId
+            : Boolean(agentName && a.fullName.toLowerCase() === agentName))
+      );
+    }
+    return agents;
+  }, [agents, currentRole, currentUser]);
 
-  // Non-zero commission records for borrower-wise list
+  // Match borrower by selected agent unique ID (not display name)
+  const isBorrowerAssignedToAgent = (b: (typeof borrowers)[0], targetAgentId: string): boolean => {
+    if (b.agentId) {
+      return b.agentId === targetAgentId;
+    }
+    // Safe fallback for legacy borrower records without agentId:
+    // Only resolve by name if there is an unambiguous single agent with that name,
+    // preventing incorrect commission attribution when agent names are duplicated.
+    if (b.assignedAgent && b.assignedAgent.trim()) {
+      const trimmed = b.assignedAgent.trim().toLowerCase();
+      const matchingAgents = agents.filter((a) => a.fullName.toLowerCase() === trimmed);
+      if (matchingAgents.length === 1) {
+        return matchingAgents[0].id === targetAgentId;
+      }
+    }
+    return false;
+  };
+
+  // Filter commission records by selected agent
+  const agentFilteredBorrowers = useMemo(() => {
+    if (selectedAgentId === 'all') {
+      return scopedBorrowers;
+    }
+    return scopedBorrowers.filter((b) => isBorrowerAssignedToAgent(b, selectedAgentId));
+  }, [scopedBorrowers, selectedAgentId, agents]);
+
+  // Total Agent Commission: Exact mathematical match to selected agent (or all agents)
+  const totalCommission = useMemo(() => {
+    return agentFilteredBorrowers.reduce((sum, b) => sum + (b.agentCommission || 0), 0);
+  }, [agentFilteredBorrowers]);
+
+  // Non-zero commission records for borrower-wise list based on selected agent
   const commissionRecords = useMemo(() => {
-    return scopedBorrowers.filter((b) => (b.agentCommission || 0) > 0);
-  }, [scopedBorrowers]);
+    return agentFilteredBorrowers.filter((b) => (b.agentCommission || 0) > 0);
+  }, [agentFilteredBorrowers]);
 
   // Search filter
   const filteredRecords = useMemo(() => {
@@ -142,23 +192,43 @@ export const AgentCommissionModal: React.FC<AgentCommissionModalProps> = ({
           </div>
         </div>
 
-        {/* Controls / Search Bar */}
-        <div className="px-5 sm:px-6 py-3 border-b border-slate-100 bg-slate-50/70 shrink-0 flex flex-col sm:flex-row gap-3 items-center justify-between">
-          <div className="relative w-full sm:max-w-xs">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search borrower, book no, line..."
-              className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all"
-            />
+        {/* Controls / Search Bar & Agent Filter */}
+        <div className="px-5 sm:px-6 py-3 border-b border-slate-100 bg-slate-50/70 shrink-0 flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center flex-1">
+            {/* Agent Dropdown Filter */}
+            <div className="w-full sm:w-48 shrink-0">
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className="w-full h-9 px-3 text-xs sm:text-sm font-semibold text-slate-800 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all cursor-pointer shadow-sm"
+                aria-label="Filter by Agent"
+              >
+                <option value="all">All Agents</option>
+                {availableAgents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.fullName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative w-full sm:max-w-xs">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search borrower, book no, line..."
+                className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all shadow-sm"
+              />
+            </div>
           </div>
 
-          <div className="text-xs font-semibold text-slate-500 self-end sm:self-center">
+          <div className="text-xs font-semibold text-slate-500 self-end sm:self-center shrink-0">
             Showing {filteredRecords.length} of {commissionRecords.length} records
           </div>
         </div>
@@ -174,6 +244,8 @@ export const AgentCommissionModal: React.FC<AgentCommissionModalProps> = ({
               <p className="text-xs text-slate-400 mt-1 max-w-sm">
                 {searchQuery.trim()
                   ? 'No borrower matches your search query. Try adjusting your search keywords.'
+                  : selectedAgentId !== 'all'
+                  ? 'No commission records found for the selected agent.'
                   : 'Borrowers with assigned agent commission will automatically appear in this list.'}
               </p>
             </div>
