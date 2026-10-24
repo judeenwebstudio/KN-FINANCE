@@ -7,8 +7,6 @@ import {
   calculateBorrowerEndDate,
   calculateSuggestedDueStartDate,
   parseCustomDate,
-  calculateAgentCommission,
-  calculateDeductedAmount,
   calculateNetAmountGiven,
 } from '../utils/loanCalculations';
 import { COLLECTION_METHODS } from '../types';
@@ -135,31 +133,15 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     return isNaN(val) || val <= 0 ? 0 : val;
   }, [loanAmount]);
 
-  const isAutoFinanceType = financeType === 'Daily' || financeType === 'Weekly';
-
-  const autoAgentCommission = useMemo(() => {
-    return calculateAgentCommission(parsedLoanAmount);
-  }, [parsedLoanAmount]);
-
-  const autoDeductedAmount = useMemo(() => {
-    return calculateDeductedAmount(parsedLoanAmount);
-  }, [parsedLoanAmount]);
-
   const effectiveAgentCommission = useMemo(() => {
-    if (isAutoFinanceType) {
-      return autoAgentCommission;
-    }
     const val = parseFloat(agentCommission);
     return isNaN(val) || val < 0 ? 0 : val;
-  }, [isAutoFinanceType, autoAgentCommission, agentCommission]);
+  }, [agentCommission]);
 
   const effectiveDeductedAmount = useMemo(() => {
-    if (isAutoFinanceType) {
-      return autoDeductedAmount;
-    }
     const val = parseFloat(deductedAmount);
     return isNaN(val) || val < 0 ? 0 : val;
-  }, [isAutoFinanceType, autoDeductedAmount, deductedAmount]);
+  }, [deductedAmount]);
 
   const calculatedNetAmountGiven = useMemo(() => {
     return calculateNetAmountGiven(parsedLoanAmount, effectiveDeductedAmount, effectiveAgentCommission);
@@ -246,24 +228,6 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       const todayIso = getTodayIsoDate();
       const suggested = calculateSuggestedDueStartDate(todayIso, newType, weeklyCollectionDay, monthlyCollectionDay);
       setStartDateIso(suggested);
-    }
-
-    if (newType === 'Daily' || newType === 'Weekly') {
-      // Monthly -> Daily/Weekly: Replace manual values with current Loan Amount * 5% and * 7%
-      const comm = calculateAgentCommission(parsedLoanAmount);
-      const ded = calculateDeductedAmount(parsedLoanAmount);
-      setAgentCommission(comm > 0 ? String(comm) : '');
-      setDeductedAmount(ded > 0 ? String(ded) : '');
-    } else if (newType === 'Monthly') {
-      // Daily/Weekly -> Monthly: Switch to editable manual inputs without auto recalculation
-      if (!agentCommission && parsedLoanAmount > 0) {
-        const comm = calculateAgentCommission(parsedLoanAmount);
-        if (comm > 0) setAgentCommission(String(comm));
-      }
-      if (!deductedAmount && parsedLoanAmount > 0) {
-        const ded = calculateDeductedAmount(parsedLoanAmount);
-        if (ded > 0) setDeductedAmount(String(ded));
-      }
     }
 
     setErrors((prev) => {
@@ -411,23 +375,23 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
       if (!monthlyCollectionDay || monthlyCollectionDay < 1 || monthlyCollectionDay > 31) {
         newErrors.monthlyCollectionDay = 'Collection Date is required';
       }
+    }
 
-      const commVal = agentCommission.trim() === '' ? 0 : parseFloat(agentCommission);
-      if (agentCommission.trim() !== '' && (isNaN(commVal) || commVal < 0)) {
-        newErrors.agentCommission = 'Commission cannot be negative';
-      }
+    const commVal = agentCommission.trim() === '' ? 0 : parseFloat(agentCommission);
+    if (agentCommission.trim() !== '' && (isNaN(commVal) || commVal < 0)) {
+      newErrors.agentCommission = 'Commission cannot be negative';
+    }
 
-      const dedVal = deductedAmount.trim() === '' ? 0 : parseFloat(deductedAmount);
-      if (deductedAmount.trim() !== '' && (isNaN(dedVal) || dedVal < 0)) {
-        newErrors.deductedAmount = 'Deducted amount cannot be negative';
-      }
+    const dedVal = deductedAmount.trim() === '' ? 0 : parseFloat(deductedAmount);
+    if (deductedAmount.trim() !== '' && (isNaN(dedVal) || dedVal < 0)) {
+      newErrors.deductedAmount = 'Deducted amount cannot be negative';
+    }
 
-      if (!isNaN(loanVal) && loanVal > 0) {
-        const c = isNaN(commVal) || commVal < 0 ? 0 : commVal;
-        const d = isNaN(dedVal) || dedVal < 0 ? 0 : dedVal;
-        if ((c + d) > loanVal) {
-          newErrors.deductedAmount = 'Commission + Deducted Amount cannot exceed Loan Amount';
-        }
+    if (!isNaN(loanVal) && loanVal > 0) {
+      const c = isNaN(commVal) || commVal < 0 ? 0 : commVal;
+      const d = isNaN(dedVal) || dedVal < 0 ? 0 : dedVal;
+      if ((c + d) > loanVal) {
+        newErrors.deductedAmount = 'Commission + Deducted Amount cannot exceed Loan Amount';
       }
     }
 
@@ -927,37 +891,27 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Agent Commission (₹)
                 </label>
-                {isAutoFinanceType ? (
-                  <input
-                    type="text"
-                    readOnly
-                    disabled
-                    value={parsedLoanAmount > 0 ? autoAgentCommission.toLocaleString('en-IN') : '0'}
-                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
-                  />
-                ) : (
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={agentCommission}
-                    onChange={(e) => {
-                      setAgentCommission(e.target.value);
-                      if (errors.agentCommission || errors.deductedAmount) {
-                        setErrors((prev) => {
-                          const copy = { ...prev };
-                          delete copy.agentCommission;
-                          delete copy.deductedAmount;
-                          return copy;
-                        });
-                      }
-                    }}
-                    placeholder="e.g. 300"
-                    className={`w-full h-11 px-3.5 rounded-xl border ${
-                      errors.agentCommission ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
-                  />
-                )}
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={agentCommission}
+                  onChange={(e) => {
+                    setAgentCommission(e.target.value);
+                    if (errors.agentCommission || errors.deductedAmount) {
+                      setErrors((prev) => {
+                        const copy = { ...prev };
+                        delete copy.agentCommission;
+                        delete copy.deductedAmount;
+                        return copy;
+                      });
+                    }
+                  }}
+                  placeholder="e.g. 300"
+                  className={`w-full h-11 px-3.5 rounded-xl border ${
+                    errors.agentCommission ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                  } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
+                />
                 {errors.agentCommission && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.agentCommission}</p>
                 )}
@@ -968,37 +922,27 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                 <label className="block text-xs sm:text-sm font-semibold text-[#1e293b] mb-1.5 whitespace-nowrap">
                   Deducted Amount (₹)
                 </label>
-                {isAutoFinanceType ? (
-                  <input
-                    type="text"
-                    readOnly
-                    disabled
-                    value={parsedLoanAmount > 0 ? autoDeductedAmount.toLocaleString('en-IN') : '0'}
-                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-[#1e293b] font-semibold cursor-not-allowed select-none"
-                  />
-                ) : (
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={deductedAmount}
-                    onChange={(e) => {
-                      setDeductedAmount(e.target.value);
-                      if (errors.agentCommission || errors.deductedAmount) {
-                        setErrors((prev) => {
-                          const copy = { ...prev };
-                          delete copy.agentCommission;
-                          delete copy.deductedAmount;
-                          return copy;
-                        });
-                      }
-                    }}
-                    placeholder="e.g. 400"
-                    className={`w-full h-11 px-3.5 rounded-xl border ${
-                      errors.deductedAmount ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
-                    } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
-                  />
-                )}
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={deductedAmount}
+                  onChange={(e) => {
+                    setDeductedAmount(e.target.value);
+                    if (errors.agentCommission || errors.deductedAmount) {
+                      setErrors((prev) => {
+                        const copy = { ...prev };
+                        delete copy.agentCommission;
+                        delete copy.deductedAmount;
+                        return copy;
+                      });
+                    }
+                  }}
+                  placeholder="e.g. 400"
+                  className={`w-full h-11 px-3.5 rounded-xl border ${
+                    errors.deductedAmount ? 'border-red-400 bg-red-50/20' : 'border-slate-200'
+                  } text-sm text-[#1e293b] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] transition-all`}
+                />
                 {errors.deductedAmount && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.deductedAmount}</p>
                 )}

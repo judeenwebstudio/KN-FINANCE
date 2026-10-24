@@ -21,8 +21,6 @@ import type {
 import { DEFAULT_SETTINGS } from '../types';
 import { hashPin, hashPinSync } from '../utils/security';
 import {
-  calculateAgentCommission,
-  calculateDeductedAmount,
   calculateNetAmountGiven,
   calculateDueBorrowersForDate,
 } from '../utils/loanCalculations';
@@ -1246,13 +1244,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       : (data.agentId || null);
 
     const loanAmt = Number(data.loanAmount) || 0;
-    const isAutoFinanceType = data.financeType === 'Daily' || data.financeType === 'Weekly';
-    const agentComm = isAutoFinanceType
-      ? calculateAgentCommission(loanAmt)
-      : (data.agentCommission !== undefined ? Number(data.agentCommission) : 0);
-    const deductedAmt = isAutoFinanceType
-      ? calculateDeductedAmount(loanAmt)
-      : (data.deductedAmount !== undefined ? Number(data.deductedAmount) : 0);
+    const agentComm = data.agentCommission !== undefined && data.agentCommission !== null
+      ? Number(data.agentCommission)
+      : 0;
+    const deductedAmt = data.deductedAmount !== undefined && data.deductedAmount !== null
+      ? Number(data.deductedAmount)
+      : 0;
     const netAmt = calculateNetAmountGiven(loanAmt, deductedAmt, agentComm);
 
     if (isCloudAuth && currentUser && supabase) {
