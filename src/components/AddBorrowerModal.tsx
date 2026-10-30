@@ -22,7 +22,18 @@ interface AddBorrowerModalProps {
 // Duration options per finance type
 const DURATION_OPTIONS: Record<Timeframe, string[]> = {
   Daily: ['30 Days', '50 Days', '60 Days', '90 Days', '100 Days'],
-  Weekly: ['10 Weeks', '12 Weeks', '15 Weeks', '20 Weeks'],
+  Weekly: [
+    '1 Week',
+    '2 Weeks',
+    '3 Weeks',
+    '4 Weeks',
+    '5 Weeks',
+    '6 Weeks',
+    '7 Weeks',
+    '8 Weeks',
+    '9 Weeks',
+    '10 Weeks',
+  ],
   Monthly: [
     '1 Month',
     '2 Months',
@@ -34,8 +45,6 @@ const DURATION_OPTIONS: Record<Timeframe, string[]> = {
     '8 Months',
     '9 Months',
     '10 Months',
-    '11 Months',
-    '12 Months',
   ],
 };
 
@@ -731,6 +740,11 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
                       {dur}
                     </option>
                   ))}
+                  {!DURATION_OPTIONS[financeType].includes(repaymentDuration) && repaymentDuration && (
+                    <option key={repaymentDuration} value={repaymentDuration}>
+                      {repaymentDuration}
+                    </option>
+                  )}
                 </select>
                 {errors.repaymentDuration && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.repaymentDuration}</p>
