@@ -21,7 +21,7 @@ interface AddBorrowerModalProps {
 
 // Duration options per finance type
 const DURATION_OPTIONS: Record<Timeframe, string[]> = {
-  Daily: ['30 Days', '50 Days', '60 Days', '90 Days', '100 Days'],
+  Daily: Array.from({ length: 100 }, (_, i) => `${i + 1} ${i === 0 ? 'Day' : 'Days'}`),
   Weekly: [
     '1 Week',
     '2 Weeks',
@@ -202,7 +202,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
         setCollectionLine(activeLines[0]?.name || '');
         setCollectionMethod('Hand Cash');
         const initialDurations = DURATION_OPTIONS[initialType];
-        setRepaymentDuration(initialDurations[1] || initialDurations[0]);
+        setRepaymentDuration(initialType === 'Daily' ? '50 Days' : (initialDurations[1] || initialDurations[0]));
         setPaymentDateIso(todayIso);
         const suggestedStart = calculateSuggestedDueStartDate(todayIso, initialType, todayDay1to7, todayD.getDate());
         setStartDateIso(suggestedStart);
@@ -231,7 +231,7 @@ export const AddBorrowerModal: React.FC<AddBorrowerModalProps> = ({
     setFinanceType(newType);
     const options = DURATION_OPTIONS[newType];
     if (!options.includes(repaymentDuration)) {
-      setRepaymentDuration(options[1] || options[0]);
+      setRepaymentDuration(newType === 'Daily' ? '50 Days' : (options[1] || options[0]));
     }
     if (!initialBorrower && !isStartDateManuallyEdited) {
       const todayIso = getTodayIsoDate();
